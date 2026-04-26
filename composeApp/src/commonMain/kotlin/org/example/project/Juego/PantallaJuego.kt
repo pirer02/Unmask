@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -28,6 +29,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import org.example.project.Datos.*
+
+// 👇 IMPORTS PARA LA IMAGEN 👇
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 
 enum class FaseJuego {
     REVELAR_ROLES, DEBATE, RESULTADOS
@@ -41,7 +46,8 @@ fun String.capitalizarPrimera(): String {
 data class PalabraJuego(
     val palabra: String,
     val pista: String,
-    val nombreGrupo: String? = null
+    val nombreGrupo: String? = null,
+    val imagenUrl: String? = null // 👇 NUEVO: Añadimos la URL al modelo temporal del juego
 )
 
 @Composable
@@ -59,20 +65,22 @@ fun PantallaJuego(
                     PalabraJuego(
                         palabra = elemento.palabra.capitalizarPrimera(),
                         pista = elemento.pista.capitalizarPrimera(),
-                        nombreGrupo = null
+                        nombreGrupo = null,
+                        imagenUrl = elemento.imagenUrl // 👇 Extraemos la URL
                     )
                 )
                 is ElementoGuardado.Conjunto -> elemento.palabras.map { p ->
                     PalabraJuego(
                         palabra = p.palabra.capitalizarPrimera(),
                         pista = p.pista.capitalizarPrimera(),
-                        nombreGrupo = elemento.nombreConjunto.capitalizarPrimera()
+                        nombreGrupo = elemento.nombreConjunto.capitalizarPrimera(),
+                        imagenUrl = p.imagenUrl // 👇 Extraemos la URL
                     )
                 }
             }
         }
 
-        // 👇 FILTRAMOS LAS PALABRAS USADAS
+        // FILTRAMOS LAS PALABRAS USADAS
         val palabrasDisponibles = if (opciones.sinRepeticiones) {
             val usadas = GestorDatos.palabrasUsadasSesion.map { it.lowercase() }
             todasLasPalabras.filter { it.palabra.lowercase() !in usadas }
@@ -80,10 +88,10 @@ fun PantallaJuego(
             todasLasPalabras
         }
 
-        // Elegimos una aleatoria (Si hubiese un error y la lista llegara vacía, salvamos cogiendo de la general)
+        // Elegimos una aleatoria
         val elegida = if (palabrasDisponibles.isNotEmpty()) palabrasDisponibles.random() else todasLasPalabras.random()
 
-        // 👇 LA REGISTRAMOS COMO USADA
+        // LA REGISTRAMOS COMO USADA
         if (opciones.sinRepeticiones) {
             GestorDatos.palabrasUsadasSesion.add(elegida.palabra)
         }
@@ -183,12 +191,27 @@ fun PantallaJuego(
                                 val textoGrupo = palabraElegida.nombreGrupo?.let { " [$it]" } ?: ""
 
                                 if (esImpostor) {
+                                    // EL IMPOSTOR NUNCA VE LA FOTO. Solo la pista (si está activada).
                                     if (opciones.pistaParaImpostor) {
                                         Text("Pista: ${palabraElegida.pista}", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                     } else {
                                         Text("¡No te descubras!", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                                     }
                                 } else {
+                                    // 👇 NUEVO: LOS CIVILES SÍ VEN LA FOTO (si existe)
+                                    palabraElegida.imagenUrl?.let { url ->
+                                        KamelImage(
+                                            resource = asyncPainterResource(url),
+                                            contentDescription = "Imagen secreta",
+                                            modifier = Modifier
+                                                .size(160.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .border(2.dp, Color(0xFF18C1A8), RoundedCornerShape(16.dp)),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                    }
+
                                     Text("Palabra: ${palabraElegida.palabra}$textoGrupo", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 }
                             }

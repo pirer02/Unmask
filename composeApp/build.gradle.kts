@@ -17,7 +17,7 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
+
     listOf(
         iosArm64(),
         iosSimulatorArm64()
@@ -27,7 +27,7 @@ kotlin {
             isStatic = true
         }
     }
-    
+
     sourceSets {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
@@ -35,14 +35,10 @@ kotlin {
 
             implementation("io.ktor:ktor-client-okhttp:2.3.11")
 
-            // Lo que añadiste en el paso anterior:
             implementation("com.google.android.gms:play-services-auth:21.0.0")
             implementation("com.google.firebase:firebase-auth-ktx:22.3.1")
 
-            // 👇 AÑADE ESTAS DOS LÍNEAS NUEVAS AQUÍ 👇
-            // Esto dicta las versiones compatibles de Firebase para Android
             implementation(project.dependencies.platform("com.google.firebase:firebase-bom:32.8.1"))
-            // Declaramos firestore nativo (sin versión, porque el BoM ya se encarga)
             implementation("com.google.firebase:firebase-firestore")
         }
         commonMain.dependencies {
@@ -57,17 +53,18 @@ kotlin {
 
             implementation(compose.materialIconsExtended)
 
+            // Manejo de Imágenes (ya lo tenías)
             implementation("media.kamel:kamel-image:0.9.4")
 
+            // 👇 NUEVO: Librería para el WebView Multiplataforma
+            implementation("io.github.kevinnzou:compose-webview-multiplatform:1.9.40")
+
             implementation("io.ktor:ktor-client-core:2.3.11")
-
-
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
             implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
 
-
-            implementation("dev.gitlive:firebase-auth:1.11.1") // Autenticación
-            implementation("dev.gitlive:firebase-firestore:1.11.1") // Base de datos (opcional)
+            implementation("dev.gitlive:firebase-auth:1.11.1")
+            implementation("dev.gitlive:firebase-firestore:1.11.1")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -105,4 +102,3 @@ android {
 dependencies {
     debugImplementation(libs.compose.uiTooling)
 }
-
