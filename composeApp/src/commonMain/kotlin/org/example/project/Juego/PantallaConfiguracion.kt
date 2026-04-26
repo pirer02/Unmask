@@ -23,25 +23,39 @@ import org.example.project.Datos.*
 fun PantallaConfiguracion(
     coleccion: ColeccionGuardada,
     jugadores: List<String>,
+    opcionesIniciales: OpcionesJuego?, // 👇 Recibe la configuración anterior si existe
     snackbarHostState: SnackbarHostState,
     onIrAJugadores: () -> Unit,
-    onIniciarJuego: (OpcionesJuego) -> Unit, // 👇 Ahora enviamos las opciones al enrutador
+    onIniciarJuego: (OpcionesJuego) -> Unit,
     onVolver: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var numImpostores by remember { mutableStateOf(1) }
-    var pistaParaImpostor by remember { mutableStateOf(false) }
 
-    var limiteRondas by remember { mutableStateOf(false) }
-    var rondas by remember { mutableStateOf(5) }
+    // 👇 Inicializamos con la configuración pasada por parámetro (para mantenerla intacta al volver)
+    var numImpostores by remember { mutableStateOf(opcionesIniciales?.numImpostores ?: 1) }
+    var pistaParaImpostor by remember { mutableStateOf(opcionesIniciales?.pistaParaImpostor ?: false) }
 
-    var limiteTiempo by remember { mutableStateOf(false) }
-    var tiempoMinutos by remember { mutableStateOf(10) }
+    var limiteRondas by remember { mutableStateOf(opcionesIniciales?.limiteRondas ?: false) }
+    var rondas by remember { mutableStateOf(opcionesIniciales?.rondas ?: 5) }
+
+    var limiteTiempo by remember { mutableStateOf(opcionesIniciales?.limiteTiempo ?: false) }
+    var tiempoMinutos by remember { mutableStateOf(opcionesIniciales?.tiempoMinutos ?: 10) }
+
+    // 👇 El estado del nuevo botón
+    var sinRepeticiones by remember { mutableStateOf(opcionesIniciales?.sinRepeticiones ?: false) }
 
     val maxImpostores = max(1, jugadores.size / 3)
     LaunchedEffect(jugadores.size) {
-        numImpostores = 1
+        if (numImpostores > maxImpostores) numImpostores = maxImpostores // Evitamos bugs sin borrar tu configuración
     }
+
+    // 👇 CÁLCULOS DEL CONTADOR DE PALABRAS
+    val totalPalabras = remember(coleccion) {
+        coleccion.elementos.sumOf {
+            if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size
+        }
+    }
+    val palabrasRestantes = if (sinRepeticiones) totalPalabras - GestorDatos.palabrasUsadasSesion.size else totalPalabras
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF9F9F9))) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -87,6 +101,39 @@ fun PantallaConfiguracion(
                 }
             }
 
+            // 👇 NUEVA TARJETA: NO REPETIR PALABRAS
+            TarjetaConfig {
+                Column {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("No repetir palabras", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Evita que salgan palabras de partidas anteriores", fontSize = 12.sp, color = Color.LightGray)
+                        }
+                        Switch(
+                            checked = sinRepeticiones,
+                            onCheckedChange = {
+                                sinRepeticiones = it
+                                // Se vacía el contador si la enciendes o apagas, contando como desde el principio
+                                GestorDatos.palabrasUsadasSesion.clear()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF18C1A8))
+                        )
+                    }
+                    // Si está activo, mostramos el contador
+                    if (sinRepeticiones) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Palabras restantes:", color = Color.White, fontSize = 14.sp)
+                            Text(
+                                "$palabrasRestantes / $totalPalabras",
+                                color = if (palabrasRestantes <= 0) Color.Red else Color(0xFFFF6D00),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             TarjetaConfig {
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -123,12 +170,14 @@ fun PantallaConfiguracion(
 
             Button(
                 onClick = {
-                    if (jugadores.size >= 3) {
-                        // 👇 EMPAQUETAMOS Y ENVIAMOS LAS OPCIONES
-                        val opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos)
-                        onIniciarJuego(opciones)
-                    } else {
+                    if (jugadores.size < 3) {
                         coroutineScope.launch { snackbarHostState.showSnackbar("Faltan jugadores. Necesitas mínimo 3.") }
+                    } else if (sinRepeticiones && palabrasRestantes <= 0) {
+                        // 👇 Bloqueamos si el contador llega a cero
+                        coroutineScope.launch { snackbarHostState.showSnackbar("No quedan palabras nuevas. Apaga y enciende la opción para reiniciar.") }
+                    } else {
+                        val opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
+                        onIniciarJuego(opciones)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(60.dp),

@@ -34,6 +34,9 @@ object GestorDatos {
     val coleccionesGlobales = mutableStateListOf<ColeccionGuardada>()
     val jugadoresGlobales = mutableStateListOf<String>()
 
+    // 👇 NUEVO: Registro temporal de palabras usadas en la sesión actual
+    val palabrasUsadasSesion = mutableStateListOf<String>()
+
     fun cargarDatos() {
         // Cargar Colecciones
         val jsonColecciones = settings.getString(KEY_COLECCIONES, "")

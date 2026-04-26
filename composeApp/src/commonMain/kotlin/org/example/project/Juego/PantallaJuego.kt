@@ -71,7 +71,24 @@ fun PantallaJuego(
                 }
             }
         }
-        todasLasPalabras.random()
+
+        // 👇 FILTRAMOS LAS PALABRAS USADAS
+        val palabrasDisponibles = if (opciones.sinRepeticiones) {
+            val usadas = GestorDatos.palabrasUsadasSesion.map { it.lowercase() }
+            todasLasPalabras.filter { it.palabra.lowercase() !in usadas }
+        } else {
+            todasLasPalabras
+        }
+
+        // Elegimos una aleatoria (Si hubiese un error y la lista llegara vacía, salvamos cogiendo de la general)
+        val elegida = if (palabrasDisponibles.isNotEmpty()) palabrasDisponibles.random() else todasLasPalabras.random()
+
+        // 👇 LA REGISTRAMOS COMO USADA
+        if (opciones.sinRepeticiones) {
+            GestorDatos.palabrasUsadasSesion.add(elegida.palabra)
+        }
+
+        elegida
     }
 
     val ordenPase = remember { jugadores.shuffled() }
@@ -167,13 +184,11 @@ fun PantallaJuego(
 
                                 if (esImpostor) {
                                     if (opciones.pistaParaImpostor) {
-                                        // 👇 AQUÍ ESTÁ LA MAGIA: Quitamos el $textoGrupo de la pista del impostor
                                         Text("Pista: ${palabraElegida.pista}", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                     } else {
                                         Text("¡No te descubras!", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                                     }
                                 } else {
-                                    // Al civil sí le dejamos el grupo para que sepa exactamente qué palabra es
                                     Text("Palabra: ${palabraElegida.palabra}$textoGrupo", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 }
                             }

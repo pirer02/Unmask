@@ -26,10 +26,10 @@ data class OpcionesJuego(
     val limiteRondas: Boolean,
     val rondas: Int,
     val limiteTiempo: Boolean,
-    val tiempoMinutos: Int
+    val tiempoMinutos: Int,
+    val sinRepeticiones: Boolean = false // 👇 NUEVO: Parámetro para no repetir
 )
 
-// 👇 AQUÍ RECIBIMOS LA ORDEN DE GOOGLE DESDE MAINACTIVITY
 @Composable
 fun App(onLoginGoogle: () -> Unit = {}) {
     MaterialTheme {
@@ -46,7 +46,7 @@ fun App(onLoginGoogle: () -> Unit = {}) {
                 CircularProgressIndicator(color = Color(0xFFFF6D00))
             }
         } else {
-            ContenedorPrincipal(onLoginGoogle = onLoginGoogle) // 👇 LA PASAMOS HACIA ABAJO
+            ContenedorPrincipal(onLoginGoogle = onLoginGoogle)
         }
     }
 }
@@ -100,6 +100,9 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                 PantallaNavegacion.INICIO -> PantallaInicio(
                     onJugar = { coleccion ->
                         coleccionParaJugar = coleccion
+                        // 👇 NUEVO: Limpiamos la memoria de palabras si empezamos de cero
+                        GestorDatos.palabrasUsadasSesion.clear()
+                        opcionesConfiguradas = null
                         pantallaActual = PantallaNavegacion.CONFIG_JUEGO
                     },
                     onGestionarJugadores = {
@@ -114,6 +117,8 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                     },
                     onJugar = { coleccion ->
                         coleccionParaJugar = coleccion
+                        GestorDatos.palabrasUsadasSesion.clear()
+                        opcionesConfiguradas = null
                         pantallaActual = PantallaNavegacion.CONFIG_JUEGO
                     }
                 )
@@ -132,7 +137,10 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                 PantallaNavegacion.CONFIG_JUEGO -> {
                     coleccionParaJugar?.let { coleccion ->
                         PantallaConfiguracion(
-                            coleccion = coleccion, jugadores = jugadoresGlobales, snackbarHostState = snackbarHostState,
+                            coleccion = coleccion,
+                            jugadores = jugadoresGlobales,
+                            opcionesIniciales = opcionesConfiguradas, // 👇 Pasamos las opciones guardadas si venimos del juego
+                            snackbarHostState = snackbarHostState,
                             onIrAJugadores = { pantallaAnteriorJugadores = PantallaNavegacion.CONFIG_JUEGO; pantallaActual = PantallaNavegacion.JUGADORES },
                             onIniciarJuego = { opciones -> opcionesConfiguradas = opciones; pantallaActual = PantallaNavegacion.JUEGO },
                             onVolver = { pantallaActual = PantallaNavegacion.INICIO }
@@ -142,7 +150,13 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                 PantallaNavegacion.JUGADORES -> PantallaJugadores(jugadores = jugadoresGlobales, onVolver = { pantallaActual = pantallaAnteriorJugadores })
                 PantallaNavegacion.JUEGO -> {
                     if (coleccionParaJugar != null && opcionesConfiguradas != null) {
-                        PantallaJuego(coleccion = coleccionParaJugar!!, jugadores = jugadoresGlobales.toList(), opciones = opcionesConfiguradas!!, onSalir = { pantallaActual = PantallaNavegacion.INICIO })
+                        PantallaJuego(
+                            coleccion = coleccionParaJugar!!,
+                            jugadores = jugadoresGlobales.toList(),
+                            opciones = opcionesConfiguradas!!,
+                            // 👇 CAMBIO CLAVE: Al terminar la partida, volvemos a la configuración
+                            onSalir = { pantallaActual = PantallaNavegacion.CONFIG_JUEGO }
+                        )
                     }
                 }
                 PantallaNavegacion.EXPLORAR -> PantallaEnConstruccion("Explorar")
@@ -157,6 +171,8 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                         },
                         onJugar = { coleccion ->
                             coleccionParaJugar = coleccion
+                            GestorDatos.palabrasUsadasSesion.clear()
+                            opcionesConfiguradas = null
                             pantallaActual = PantallaNavegacion.CONFIG_JUEGO
                         }
                     )

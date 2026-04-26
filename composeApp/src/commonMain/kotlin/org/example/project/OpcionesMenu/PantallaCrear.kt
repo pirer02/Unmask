@@ -1,3 +1,4 @@
+import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -8,9 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -75,15 +79,136 @@ fun PantallaCrear(
 
     var errorNombreCol by remember { mutableStateOf(false) }
     var mensajeErrorNombreCol by remember { mutableStateOf("") }
-
     var errorCategoriaCol by remember { mutableStateOf(false) }
     var mensajeErrorCategoriaCol by remember { mutableStateOf("") }
 
     val elementos = remember { mutableStateListOf<ElementoUI>() }
 
+    // --- NUEVOS ESTADOS ---
+    var textoBusqueda by remember { mutableStateOf("") }
+    var mostrandoBuscador by remember { mutableStateOf(false) }
+
+    var mostrarDialogoImportar by remember { mutableStateOf(false) }
+    var textoAImportar by remember { mutableStateOf("") }
+    var elementosPendientesImportar by remember { mutableStateOf<List<ElementoUI>>(emptyList()) }
+    var mostrarDialogoConflictos by remember { mutableStateOf(false) }
+
     // --- Control del Diálogo de Borrado ---
     var indiceParaBorrar by remember { mutableStateOf<Int?>(null) }
     var tituloDialogoBorrado by remember { mutableStateOf("") }
+
+    // --- FUNCIONES DE UTILIDAD ---
+
+    // 1. Validar en tiempo real (Se llama cada vez que cambia un texto)
+    fun validarDuplicadosGlobales() {
+        val palabrasVistas = mutableSetOf<String>()
+        val pistasVistas = mutableSetOf<String>()
+
+        elementos.forEach { el ->
+            when (el) {
+                is ElementoUI.Individual -> {
+                    el.data.errorPalabra = false; el.data.errorPista = false
+                    val pLimpia = el.data.palabra.trim().lowercase()
+                    val cLimpia = el.data.pista.trim().lowercase()
+
+                    if (pLimpia.isNotEmpty()) {
+                        if (!palabrasVistas.add(pLimpia)) {
+                            el.data.errorPalabra = true; el.data.mensajeErrorPalabra = "Repetida"
+                        }
+                    }
+                    if (cLimpia.isNotEmpty()) {
+                        if (!pistasVistas.add(cLimpia)) {
+                            el.data.errorPista = true; el.data.mensajeErrorPista = "Repetida"
+                        }
+                    }
+                }
+                is ElementoUI.Conjunto -> {
+                    el.palabras.forEach { p ->
+                        p.errorPalabra = false; p.errorPista = false
+                        val pLimpia = p.palabra.trim().lowercase()
+                        val cLimpia = p.pista.trim().lowercase()
+
+                        if (pLimpia.isNotEmpty()) {
+                            if (!palabrasVistas.add(pLimpia)) {
+                                p.errorPalabra = true; p.mensajeErrorPalabra = "Repetida"
+                            }
+                        }
+                        if (cLimpia.isNotEmpty()) {
+                            if (!pistasVistas.add(cLimpia)) {
+                                p.errorPista = true; p.mensajeErrorPista = "Repetida"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Procesar el bloque de texto
+    fun procesarTextoImportacion(texto: String) {
+        val nuevosElementos = mutableListOf<ElementoUI>()
+        var conjuntoActual: ElementoUI.Conjunto? = null
+
+        val lineas = texto.lines()
+        for (lineaOriginal in lineas) {
+            val linea = lineaOriginal.trim()
+            if (linea.isBlank()) continue
+
+            // Si la línea es literalmente solo un ".", fuerza el cierre del conjunto actual
+            if (linea == ".") {
+                conjuntoActual = null
+                continue
+            }
+
+            // Detectar inicio de colección (empieza por '.' y no tiene coma)
+            if (linea.startsWith(".") && !linea.contains(",") && linea.length > 1) {
+                val nombreCol = linea.substring(1).trim()
+                conjuntoActual = ElementoUI.Conjunto(nombreCol).apply { expandido = true }
+                nuevosElementos.add(conjuntoActual)
+                continue
+            }
+
+            // Detectar palabra y pista
+            if (linea.contains(",")) {
+                val partes = linea.split(",", limit = 2)
+                val palabra = partes[0].trim()
+                var pista = partes[1].trim()
+
+                val terminaColeccion = pista.endsWith(".")
+                if (terminaColeccion) {
+                    pista = pista.dropLast(1).trim() // Quitamos el punto final
+                }
+
+                if (conjuntoActual != null) {
+                    // Si estamos dentro de un grupo, lo añadimos al grupo
+                    conjuntoActual.palabras.add(PalabraUI(palabra, pista))
+                    if (terminaColeccion) {
+                        conjuntoActual = null // Cerramos el grupo porque la pista terminó en punto
+                    }
+                } else {
+                    // Si NO estamos en un grupo, cuenta automáticamente como palabra individual
+                    nuevosElementos.add(ElementoUI.Individual(PalabraUI(palabra, pista)))
+                }
+            }
+        }
+
+        // Comprobar conflictos con la lista actual
+        val palabrasActuales = elementos.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet()
+        val nuevasPalabras = nuevosElementos.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }
+
+        val hayConflictos = nuevasPalabras.any { it in palabrasActuales }
+
+        if (hayConflictos) {
+            elementosPendientesImportar = nuevosElementos
+            mostrarDialogoConflictos = true
+        } else {
+            elementos.addAll(nuevosElementos)
+            validarDuplicadosGlobales()
+            mostrarDialogoImportar = false
+            textoAImportar = ""
+            coroutineScope.launch { snackbarHostState.showSnackbar("Elementos importados con éxito") }
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (coleccionParaEditar != null) {
@@ -120,327 +245,202 @@ fun PantallaCrear(
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFE8F0FE))) {
+    // USAMOS UN BOX PARA QUE LOS BOTONES FLOTANTES NO ALTEREN EL ESPACIO DE LA CABECERA
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFE8F0FE))) {
 
-        // CABECERA CON BOTÓN GUARDAR
-        Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver") }
-            Text(if (coleccionParaEditar != null) "Editar Lista" else "Nueva Lista", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.weight(1f))
-            Button(
-                onClick = {
-                    var hayError = false
-                    var primerIndiceError = -1
-                    var mensajeSnackbar = "Faltan campos por rellenar"
+        Column(modifier = Modifier.fillMaxSize()) {
 
-                    // 1. LIMPIEZA DE ERRORES PREVIOS
-                    errorNombreCol = false
-                    errorCategoriaCol = false
-                    elementos.forEach { el ->
-                        when(el) {
-                            is ElementoUI.Individual -> { el.data.errorPalabra = false; el.data.errorPista = false }
-                            is ElementoUI.Conjunto -> {
-                                el.errorNombre = false
-                                el.palabras.forEach { p -> p.errorPalabra = false; p.errorPista = false }
-                            }
-                        }
+            // CABECERA PEgada al borde superior
+            Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onVolver) { Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver") }
+                    Text(if (coleccionParaEditar != null) "Editar Lista" else "Nueva Lista", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Botón Buscador
+                    IconButton(onClick = { mostrandoBuscador = !mostrandoBuscador }, modifier = Modifier.size(40.dp)) {
+                        Icon(if (mostrandoBuscador) Icons.Rounded.SearchOff else Icons.Rounded.Search, contentDescription = "Buscar", tint = Color.Gray)
                     }
 
-                    // 2. VALIDAR NOMBRE DE COLECCIÓN
-                    val nombreLimpio = nombreColeccion.trim()
-                    if (nombreLimpio.isBlank()) {
-                        errorNombreCol = true; mensajeErrorNombreCol = "Obligatorio"
-                        hayError = true; if (primerIndiceError == -1) primerIndiceError = 0
-                    } else {
-                        val existeOtra = GestorDatos.coleccionesGlobales.any {
-                            it.nombre.equals(nombreLimpio, ignoreCase = true) && it.nombre != coleccionParaEditar?.nombre
-                        }
-                        if (existeOtra) {
-                            errorNombreCol = true; mensajeErrorNombreCol = "¡Ya existe una lista con este nombre!"
-                            hayError = true; mensajeSnackbar = "Corrige los errores marcados"; if (primerIndiceError == -1) primerIndiceError = 0
-                        }
+                    // Botón Importar
+                    IconButton(onClick = { mostrarDialogoImportar = true }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Rounded.DataArray, contentDescription = "Importar Texto", tint = Color(0xFF18C1A8))
                     }
 
-                    if (categoriaColeccion.isBlank()) {
-                        errorCategoriaCol = true; mensajeErrorCategoriaCol = "Obligatorio"
-                        hayError = true; if (primerIndiceError == -1) primerIndiceError = 0
-                    }
+                    // Botón Guardar (Solucionado lo del salto de línea)
+                    Button(
+                        onClick = {
+                            var hayError = false
+                            var primerIndiceError = -1
+                            var mensajeSnackbar = "Faltan campos por rellenar o hay errores"
 
-                    // 3. VALIDAR PALABRAS Y PISTAS
-                    val palabrasUnicas = mutableSetOf<String>()
-                    val pistasUnicas = mutableSetOf<String>()
+                            if (nombreColeccion.trim().isBlank()) { errorNombreCol = true; hayError = true; primerIndiceError = 0 }
+                            if (categoriaColeccion.trim().isBlank()) { errorCategoriaCol = true; hayError = true; primerIndiceError = 0 }
 
-                    elementos.forEachIndexed { index, el ->
-                        val indiceRealEnLista = index + 1
+                            validarDuplicadosGlobales()
 
-                        when (el) {
-                            is ElementoUI.Individual -> {
-                                val pLimpia = el.data.palabra.trim().lowercase()
-                                val cLimpia = el.data.pista.trim().lowercase()
-
-                                if (pLimpia.isBlank()) {
-                                    el.data.errorPalabra = true; el.data.mensajeErrorPalabra = "Obligatorio"
-                                    hayError = true; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
-                                } else if (!palabrasUnicas.add(pLimpia)) {
-                                    el.data.errorPalabra = true; el.data.mensajeErrorPalabra = "¡Palabra repetida!"
-                                    hayError = true; mensajeSnackbar = "Tienes palabras repetidas"; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
-                                }
-
-                                if (cLimpia.isBlank()) {
-                                    el.data.errorPista = true; el.data.mensajeErrorPista = "Obligatorio"
-                                    hayError = true; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
-                                } else if (!pistasUnicas.add(cLimpia)) {
-                                    el.data.errorPista = true; el.data.mensajeErrorPista = "¡Pista repetida!"
-                                    hayError = true; mensajeSnackbar = "Tienes pistas repetidas"; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
-                                }
-                            }
-                            is ElementoUI.Conjunto -> {
-                                var errorEnEsteConjunto = false
-
-                                if (el.nombre.isBlank()) {
-                                    el.errorNombre = true; el.mensajeErrorNombre = "Obligatorio"
-                                    hayError = true; errorEnEsteConjunto = true
-                                }
-
-                                el.palabras.forEach { p ->
-                                    val pLimpia = p.palabra.trim().lowercase()
-                                    val cLimpia = p.pista.trim().lowercase()
-
-                                    if (pLimpia.isBlank()) {
-                                        p.errorPalabra = true; p.mensajeErrorPalabra = "Obligatorio"
-                                        hayError = true; errorEnEsteConjunto = true
-                                    } else if (!palabrasUnicas.add(pLimpia)) {
-                                        p.errorPalabra = true; p.mensajeErrorPalabra = "¡Palabra repetida!"
-                                        hayError = true; errorEnEsteConjunto = true; mensajeSnackbar = "Tienes palabras repetidas"
+                            elementos.forEachIndexed { index, el ->
+                                val indiceRealEnLista = index + 1
+                                when (el) {
+                                    is ElementoUI.Individual -> {
+                                        if (el.data.palabra.isBlank() || el.data.pista.isBlank() || el.data.errorPalabra || el.data.errorPista) {
+                                            if (el.data.palabra.isBlank()) el.data.errorPalabra = true
+                                            if (el.data.pista.isBlank()) el.data.errorPista = true
+                                            hayError = true; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
+                                        }
                                     }
+                                    is ElementoUI.Conjunto -> {
+                                        if (el.nombre.isBlank()) { el.errorNombre = true; hayError = true; el.expandido = true; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista }
+                                        el.palabras.forEach { p ->
+                                            if (p.palabra.isBlank() || p.pista.isBlank() || p.errorPalabra || p.errorPista) {
+                                                if (p.palabra.isBlank()) p.errorPalabra = true
+                                                if (p.pista.isBlank()) p.errorPista = true
+                                                hayError = true; el.expandido = true; if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-                                    if (cLimpia.isBlank()) {
-                                        p.errorPista = true; p.mensajeErrorPista = "Obligatorio"
-                                        hayError = true; errorEnEsteConjunto = true
-                                    } else if (!pistasUnicas.add(cLimpia)) {
-                                        p.errorPista = true; p.mensajeErrorPista = "¡Pista repetida!"
-                                        hayError = true; errorEnEsteConjunto = true; mensajeSnackbar = "Tienes pistas repetidas"
+                            if (hayError) {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(primerIndiceError.coerceAtLeast(0))
+                                    snackbarHostState.showSnackbar(mensajeSnackbar)
+                                }
+                            } else {
+                                val elementosGuardables = elementos.map { ui ->
+                                    when (ui) {
+                                        is ElementoUI.Individual -> ElementoGuardado.Individual(palabra = ui.data.palabra.capitalizarPrimeraCrear(), pista = ui.data.pista.capitalizarPrimeraCrear(), imagenUrl = null)
+                                        is ElementoUI.Conjunto -> ElementoGuardado.Conjunto(nombreConjunto = ui.nombre.capitalizarPrimeraCrear(), palabras = ui.palabras.map { p -> ElementoGuardado.Individual(palabra = p.palabra.capitalizarPrimeraCrear(), pista = p.pista.capitalizarPrimeraCrear(), imagenUrl = null) })
                                     }
                                 }
 
-                                if (errorEnEsteConjunto) {
-                                    el.expandido = true
-                                    if (primerIndiceError == -1) primerIndiceError = indiceRealEnLista
-                                }
+                                val nuevaLista = ColeccionGuardada(nombre = nombreColeccion.capitalizarPrimeraCrear(), categoria = categoriaColeccion.capitalizarPrimeraCrear(), elementos = elementosGuardables)
+
+                                if (coleccionParaEditar != null) GestorDatos.actualizarColeccion(coleccionParaEditar.nombre, nuevaLista)
+                                else GestorDatos.guardarNuevaColeccion(nuevaLista)
+
+                                val usuarioLogueado = GestorAuth.usuario.value
+                                if (usuarioLogueado != null) coroutineScope.launch { GestorDatos.subirColeccionNube(usuarioLogueado.uid, nuevaLista) }
+
+                                onGuardadoExitoso()
                             }
-                        }
-                    }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
+                        modifier = Modifier.padding(start = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) { Text("GUARDAR", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) }
+                }
 
-                    if (hayError) {
-                        coroutineScope.launch {
-                            listState.animateScrollToItem(primerIndiceError)
-                            snackbarHostState.showSnackbar(mensajeSnackbar)
-                        }
-                    } else {
-                        val elementosGuardables = elementos.map { ui ->
-                            when (ui) {
-                                is ElementoUI.Individual -> ElementoGuardado.Individual(
-                                    palabra = ui.data.palabra.capitalizarPrimeraCrear(),
-                                    pista = ui.data.pista.capitalizarPrimeraCrear(),
-                                    imagenUrl = null
-                                )
-                                is ElementoUI.Conjunto -> ElementoGuardado.Conjunto(
-                                    nombreConjunto = ui.nombre.capitalizarPrimeraCrear(),
-                                    palabras = ui.palabras.map { p ->
-                                        ElementoGuardado.Individual(
-                                            palabra = p.palabra.capitalizarPrimeraCrear(),
-                                            pista = p.pista.capitalizarPrimeraCrear(),
-                                            imagenUrl = null
-                                        )
-                                    }
-                                )
-                            }
-                        }
-
-                        val nuevaLista = ColeccionGuardada(
-                            nombre = nombreColeccion.capitalizarPrimeraCrear(),
-                            categoria = categoriaColeccion.capitalizarPrimeraCrear(),
-                            elementos = elementosGuardables
-                        )
-
-                        // Guardado Local
-                        if (coleccionParaEditar != null) {
-                            GestorDatos.actualizarColeccion(coleccionParaEditar.nombre, nuevaLista)
-                        } else {
-                            GestorDatos.guardarNuevaColeccion(nuevaLista)
-                        }
-
-                        // 👇 AHORA: Guardado en la Nube (Firebase)
-                        val usuarioLogueado = GestorAuth.usuario.value
-                        if (usuarioLogueado != null) {
-                            coroutineScope.launch {
-                                GestorDatos.subirColeccionNube(usuarioLogueado.uid, nuevaLista)
-                            }
-                        }
-
-                        onGuardadoExitoso()
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
-            ) { Text("GUARDAR", fontWeight = FontWeight.Bold) }
-        }
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        OutlinedTextField(
-                            value = nombreColeccion, onValueChange = { nombreColeccion = it },
-                            label = { Text("Nombre de la Lista") },
-                            keyboardOptions = opcionesTeclado,
-                            isError = errorNombreCol,
-                            supportingText = { if (errorNombreCol) Text(mensajeErrorNombreCol, color = MaterialTheme.colorScheme.error) },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = categoriaColeccion, onValueChange = { categoriaColeccion = it },
-                            label = { Text("Categoría (Ej: Películas)") },
-                            keyboardOptions = opcionesTeclado,
-                            isError = errorCategoriaCol,
-                            supportingText = { if (errorCategoriaCol) Text(mensajeErrorCategoriaCol, color = MaterialTheme.colorScheme.error) },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true
-                        )
-                    }
+                // Barra de búsqueda expandible
+                AnimatedVisibility(visible = mostrandoBuscador) {
+                    OutlinedTextField(
+                        value = textoBusqueda, onValueChange = { textoBusqueda = it },
+                        placeholder = { Text("Buscar palabra, pista o grupo...") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        trailingIcon = { if(textoBusqueda.isNotEmpty()) IconButton(onClick = { textoBusqueda = "" }) { Icon(Icons.Rounded.Clear, null) } },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
                 }
             }
 
-            itemsIndexed(elementos) { index, elemento ->
-                when (elemento) {
-
-                    is ElementoUI.Individual -> {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0x3318C1A8)),
-                            elevation = CardDefaults.cardElevation(2.dp)
-                        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Título y Categoría (Solo si no hay búsqueda activa)
+                if (textoBusqueda.isEmpty()) {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Palabra Individual", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
-                                    IconButton(
-                                        onClick = {
-                                            tituloDialogoBorrado = "Palabra Individual"
-                                            indiceParaBorrar = index
-                                        },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(Icons.Rounded.Close, contentDescription = "Borrar", tint = Color.Red)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedTextField(
-                                    value = elemento.data.palabra, onValueChange = { elemento.data.palabra = it },
-                                    label = { Text("Palabra Secreta") }, keyboardOptions = opcionesTeclado,
-                                    isError = elemento.data.errorPalabra,
-                                    supportingText = { if(elemento.data.errorPalabra) Text(elemento.data.mensajeErrorPalabra, color = MaterialTheme.colorScheme.error) },
-                                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                                    value = nombreColeccion, onValueChange = { nombreColeccion = it; errorNombreCol = false },
+                                    label = { Text("Nombre de la Lista") }, keyboardOptions = opcionesTeclado,
+                                    isError = errorNombreCol, modifier = Modifier.fillMaxWidth(), singleLine = true
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedTextField(
-                                    value = elemento.data.pista, onValueChange = { elemento.data.pista = it },
-                                    label = { Text("Pista para el Impostor") }, keyboardOptions = opcionesTeclado,
-                                    isError = elemento.data.errorPista,
-                                    supportingText = { if(elemento.data.errorPista) Text(elemento.data.mensajeErrorPista, color = MaterialTheme.colorScheme.error) },
-                                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                                    value = categoriaColeccion, onValueChange = { categoriaColeccion = it; errorCategoriaCol = false },
+                                    label = { Text("Categoría (Ej: Películas)") }, keyboardOptions = opcionesTeclado,
+                                    isError = errorCategoriaCol, modifier = Modifier.fillMaxWidth(), singleLine = true
                                 )
                             }
                         }
                     }
+                }
 
-                    is ElementoUI.Conjunto -> {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2C)),
-                            elevation = CardDefaults.cardElevation(4.dp)
-                        ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().clickable {
-                                        if (!elemento.expandido) {
-                                            elemento.expandido = true
-                                            elemento.cargando = true
-                                        } else {
-                                            elemento.expandido = false
+                itemsIndexed(elementos) { index, elemento ->
+                    // LÓGICA DE FILTRADO PARA EL BUSCADOR
+                    val coincideBusqueda = textoBusqueda.isBlank() || when (elemento) {
+                        is ElementoUI.Individual -> elemento.data.palabra.contains(textoBusqueda, true) || elemento.data.pista.contains(textoBusqueda, true)
+                        is ElementoUI.Conjunto -> elemento.nombre.contains(textoBusqueda, true) || elemento.palabras.any { it.palabra.contains(textoBusqueda, true) || it.pista.contains(textoBusqueda, true) }
+                    }
+
+                    if (!coincideBusqueda) return@itemsIndexed // No dibujar si no coincide
+
+                    when (elemento) {
+                        is ElementoUI.Individual -> {
+                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color(0x3318C1A8)), elevation = CardDefaults.cardElevation(2.dp)) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Palabra Individual", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                                        IconButton(onClick = { tituloDialogoBorrado = "Palabra Individual"; indiceParaBorrar = index }, modifier = Modifier.size(24.dp)) {
+                                            Icon(Icons.Rounded.Close, contentDescription = "Borrar", tint = Color.Red)
                                         }
-                                    }.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (elemento.expandido) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                        contentDescription = null, tint = Color(0xFFFF6D00)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (elemento.nombre.isBlank()) "Grupo de palabras..." else elemento.nombre,
-                                        color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)
-                                    )
-
-                                    if (!elemento.expandido && (elemento.errorNombre || elemento.palabras.any { it.errorPalabra || it.errorPista })) {
-                                        Icon(Icons.Rounded.Warning, contentDescription = "Error", tint = Color.Red)
-                                        Spacer(modifier = Modifier.width(8.dp))
                                     }
-
-                                    IconButton(
-                                        onClick = {
-                                            tituloDialogoBorrado = "Grupo Completo"
-                                            indiceParaBorrar = index
-                                        },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(Icons.Rounded.Delete, contentDescription = "Borrar conjunto", tint = Color.Red)
-                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = elemento.data.palabra,
+                                        onValueChange = { elemento.data.palabra = it; validarDuplicadosGlobales() },
+                                        label = { Text("Palabra Secreta") }, keyboardOptions = opcionesTeclado,
+                                        isError = elemento.data.errorPalabra,
+                                        supportingText = { if(elemento.data.errorPalabra) Text(elemento.data.mensajeErrorPalabra, color = MaterialTheme.colorScheme.error) },
+                                        modifier = Modifier.fillMaxWidth(), singleLine = true
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = elemento.data.pista,
+                                        onValueChange = { elemento.data.pista = it; validarDuplicadosGlobales() },
+                                        label = { Text("Pista para el Impostor") }, keyboardOptions = opcionesTeclado,
+                                        isError = elemento.data.errorPista,
+                                        supportingText = { if(elemento.data.errorPista) Text(elemento.data.mensajeErrorPista, color = MaterialTheme.colorScheme.error) },
+                                        modifier = Modifier.fillMaxWidth(), singleLine = true
+                                    )
                                 }
+                            }
+                        }
 
-                                if (elemento.expandido) {
-                                    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F5F5)).padding(16.dp)) {
+                        is ElementoUI.Conjunto -> {
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2C)), elevation = CardDefaults.cardElevation(4.dp)) {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable { elemento.expandido = !elemento.expandido; if(elemento.expandido) elemento.cargando = true }.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = if (elemento.expandido) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = null, tint = Color(0xFFFF6D00))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(text = if (elemento.nombre.isBlank()) "Grupo de palabras..." else elemento.nombre, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
 
-                                        if (elemento.cargando) {
-                                            var progresoAnimado by remember { mutableFloatStateOf(0f) }
+                                        if (!elemento.expandido && (elemento.errorNombre || elemento.palabras.any { it.errorPalabra || it.errorPista })) {
+                                            Icon(Icons.Rounded.Warning, contentDescription = "Error", tint = Color.Red)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
 
-                                            LaunchedEffect(Unit) {
-                                                Animatable(0f).animateTo(
-                                                    targetValue = 1f,
-                                                    animationSpec = tween(durationMillis = 500, easing = LinearOutSlowInEasing)
-                                                ) {
-                                                    progresoAnimado = value
-                                                }
-                                                elemento.cargando = false
-                                            }
+                                        IconButton(onClick = { tituloDialogoBorrado = "Grupo Completo"; indiceParaBorrar = index }, modifier = Modifier.size(24.dp)) {
+                                            Icon(Icons.Rounded.Delete, contentDescription = "Borrar conjunto", tint = Color.Red)
+                                        }
+                                    }
 
-                                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth(0.8f)) {
-                                                    LinearProgressIndicator(
-                                                        progress = progresoAnimado,
-                                                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                                        color = Color(0xFFFF6D00),
-                                                        trackColor = Color(0xFFFFD8C2)
-                                                    )
-                                                    Spacer(modifier = Modifier.height(8.dp))
-                                                    Text(
-                                                        text = "Cargando... ${(progresoAnimado * 100).toInt()}%",
-                                                        color = Color.Gray,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 12.sp
-                                                    )
-                                                }
-                                            }
-                                        } else {
+                                    AnimatedVisibility(visible = elemento.expandido || textoBusqueda.isNotEmpty()) {
+                                        Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F5F5)).padding(16.dp)) {
                                             OutlinedTextField(
-                                                value = elemento.nombre, onValueChange = { elemento.nombre = it },
+                                                value = elemento.nombre, onValueChange = { elemento.nombre = it; elemento.errorNombre = false },
                                                 label = { Text("Nombre de este Grupo") }, keyboardOptions = opcionesTeclado,
-                                                isError = elemento.errorNombre,
-                                                supportingText = { if (elemento.errorNombre) Text(elemento.mensajeErrorNombre, color = MaterialTheme.colorScheme.error) },
-                                                modifier = Modifier.fillMaxWidth(), singleLine = true
+                                                isError = elemento.errorNombre, modifier = Modifier.fillMaxWidth(), singleLine = true
                                             )
                                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -450,7 +450,8 @@ fun PantallaCrear(
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         OutlinedTextField(
-                                                            value = p.palabra, onValueChange = { p.palabra = it },
+                                                            value = p.palabra,
+                                                            onValueChange = { p.palabra = it; validarDuplicadosGlobales() },
                                                             placeholder = { Text("Palabra") }, keyboardOptions = opcionesTeclado,
                                                             isError = p.errorPalabra,
                                                             supportingText = { if(p.errorPalabra) Text(p.mensajeErrorPalabra, color = MaterialTheme.colorScheme.error) },
@@ -458,14 +459,15 @@ fun PantallaCrear(
                                                         )
                                                         Spacer(modifier = Modifier.height(4.dp))
                                                         OutlinedTextField(
-                                                            value = p.pista, onValueChange = { p.pista = it },
+                                                            value = p.pista,
+                                                            onValueChange = { p.pista = it; validarDuplicadosGlobales() },
                                                             placeholder = { Text("Pista") }, keyboardOptions = opcionesTeclado,
                                                             isError = p.errorPista,
                                                             supportingText = { if(p.errorPista) Text(p.mensajeErrorPista, color = MaterialTheme.colorScheme.error) },
                                                             modifier = Modifier.fillMaxWidth(), singleLine = true
                                                         )
                                                     }
-                                                    IconButton(onClick = { elemento.palabras.removeAt(i) }) {
+                                                    IconButton(onClick = { elemento.palabras.removeAt(i); validarDuplicadosGlobales() }) {
                                                         Icon(Icons.Rounded.Close, contentDescription = "Borrar", tint = Color.Gray)
                                                     }
                                                 }
@@ -484,58 +486,149 @@ fun PantallaCrear(
                         }
                     }
                 }
-            }
 
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedButton(
-                        onClick = { elementos.add(ElementoUI.Individual()) },
-                        modifier = Modifier.weight(1f).height(60.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF18C1A8)),
-                        border = BorderStroke(2.dp, Color(0xFF18C1A8))
-                    ) {
-                        Text("+ PALABRA", fontWeight = FontWeight.Bold)
-                    }
+                if (textoBusqueda.isEmpty()) {
+                    item {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            OutlinedButton(
+                                onClick = { elementos.add(ElementoUI.Individual()); coroutineScope.launch { delay(100); listState.animateScrollToItem(elementos.size) } },
+                                modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF18C1A8)), border = BorderStroke(2.dp, Color(0xFF18C1A8))
+                            ) { Text("+ PALABRA", fontWeight = FontWeight.Bold) }
 
-                    Button(
-                        onClick = {
-                            val nuevoConjunto = ElementoUI.Conjunto()
-                            nuevoConjunto.palabras.add(PalabraUI())
-                            nuevoConjunto.expandido = true
-                            elementos.add(nuevoConjunto)
-                        },
-                        modifier = Modifier.weight(1f).height(60.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C))
-                    ) {
-                        Text("+ GRUPO", fontWeight = FontWeight.Bold, color = Color.White)
+                            Button(
+                                onClick = {
+                                    val nuevoConjunto = ElementoUI.Conjunto().apply { palabras.add(PalabraUI()); expandido = true }
+                                    elementos.add(nuevoConjunto)
+                                    coroutineScope.launch { delay(100); listState.animateScrollToItem(elementos.size) }
+                                },
+                                modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C))
+                            ) { Text("+ GRUPO", fontWeight = FontWeight.Bold, color = Color.White) }
+                        }
+                        Spacer(modifier = Modifier.height(100.dp)) // Espacio extra para que no lo tapen los FABs
                     }
                 }
-                Spacer(modifier = Modifier.height(64.dp))
+            }
+        }
+
+        // --- BOTONES FLOTANTES ALINEADOS ABAJO A LA DERECHA ---
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End
+        ) {
+            val canScrollUp = listState.canScrollBackward
+            val canScrollDown = listState.canScrollForward
+
+            AnimatedVisibility(visible = canScrollUp, enter = scaleIn(), exit = scaleOut()) {
+                FloatingActionButton(
+                    onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } },
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF18C1A8),
+                    modifier = Modifier.size(48.dp)
+                ) { Icon(Icons.Default.ArrowUpward, "Subir") }
+            }
+
+            AnimatedVisibility(visible = canScrollDown, enter = scaleIn(), exit = scaleOut()) {
+                FloatingActionButton(
+                    onClick = { coroutineScope.launch { listState.animateScrollToItem(elementos.size + 1) } },
+                    containerColor = Color(0xFF18C1A8),
+                    contentColor = Color.White,
+                    modifier = Modifier.size(48.dp)
+                ) { Icon(Icons.Default.ArrowDownward, "Bajar") }
             }
         }
     }
 
-    // DIÁLOGO DE CONFIRMACIÓN PARA BORRAR ELEMENTOS
+    // --- DIÁLOGOS ---
+
+    // 1. Diálogo de Borrado Normal
     if (indiceParaBorrar != null) {
         AlertDialog(
             onDismissRequest = { indiceParaBorrar = null },
             title = { Text("¿Eliminar $tituloDialogoBorrado?") },
-            text = { Text("¿Estás seguro de que quieres borrar este elemento? Se perderán todos los datos que hayas escrito en su interior.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    indiceParaBorrar?.let { elementos.removeAt(it) }
-                    indiceParaBorrar = null
-                }) {
-                    Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold)
+            text = { Text("¿Estás seguro de que quieres borrar este elemento? Se perderán todos los datos.") },
+            confirmButton = { TextButton(onClick = { indiceParaBorrar?.let { elementos.removeAt(it) }; indiceParaBorrar = null; validarDuplicadosGlobales() }) { Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = { indiceParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) } }
+        )
+    }
+
+    // 2. Diálogo Importar Bloque de Texto
+    if (mostrarDialogoImportar) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoImportar = false },
+            title = { Text("Importar Palabras") },
+            text = {
+                Column {
+                    Text("Pega el texto con el formato:\n.NombreGrupo\nPalabra, Pista\nPalabra, Pista.\nO palabras individuales sueltas.", fontSize = 14.sp, color = Color.Gray)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = textoAImportar, onValueChange = { textoAImportar = it },
+                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                        placeholder = { Text("Pega aquí...") }
+                    )
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { indiceParaBorrar = null }) {
-                    Text("CANCELAR", color = Color.Gray)
+            confirmButton = { TextButton(onClick = { procesarTextoImportacion(textoAImportar) }) { Text("PROCESAR", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = { mostrarDialogoImportar = false }) { Text("CANCELAR", color = Color.Gray) } }
+        )
+    }
+
+    // 3. Diálogo de Resolución de Conflictos (Duplicados en Importación)
+    if (mostrarDialogoConflictos) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoConflictos = false },
+            title = { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Warning, null, tint = Color(0xFFFF6D00)); Spacer(Modifier.width(8.dp)); Text("¡Palabras repetidas!") } },
+            text = { Text("Algunas de las palabras que intentas importar ya existen en tu lista actual. ¿Qué deseas hacer?") },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Opcion 1: Reemplazar (Elimina las viejas y pone las nuevas)
+                    Button(onClick = {
+                        val palabrasNuevasLowercase = elementosPendientesImportar.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet()
+
+                        // Limpiar de la lista actual las palabras que vamos a importar
+                        elementos.forEach { el ->
+                            if (el is ElementoUI.Individual && palabrasNuevasLowercase.contains(el.data.palabra.lowercase())) { el.data.palabra = "" }
+                            if (el is ElementoUI.Conjunto) { el.palabras.removeAll { palabrasNuevasLowercase.contains(it.palabra.lowercase()) } }
+                        }
+                        // Limpiar elementos individuales vacíos
+                        elementos.removeAll { it is ElementoUI.Individual && it.data.palabra.isEmpty() }
+
+                        elementos.addAll(elementosPendientesImportar)
+                        validarDuplicadosGlobales()
+                        mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = ""
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text("Reemplazar antiguas") }
+
+                    // Opción 2: Omitir repetidas (Solo añade las que no existen)
+                    Button(onClick = {
+                        val palabrasActuales = elementos.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet()
+
+                        val elementosLimpios = elementosPendientesImportar.mapNotNull { el ->
+                            when (el) {
+                                is ElementoUI.Individual -> if (palabrasActuales.contains(el.data.palabra.lowercase())) null else el
+                                is ElementoUI.Conjunto -> {
+                                    val palabrasFiltradas = el.palabras.filterNot { palabrasActuales.contains(it.palabra.lowercase()) }
+                                    if (palabrasFiltradas.isNotEmpty()) { val nuevoCol = ElementoUI.Conjunto(el.nombre).apply { palabras.addAll(palabrasFiltradas); expandido=true }; nuevoCol } else null
+                                }
+                            }
+                        }
+                        elementos.addAll(elementosLimpios)
+                        validarDuplicadosGlobales()
+                        mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = ""
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C))) { Text("Omitir nuevas repetidas") }
+
+                    // Opción 3: Añadir todo (Para que el validador las ponga en rojo y el usuario edite)
+                    OutlinedButton(onClick = {
+                        elementos.addAll(elementosPendientesImportar)
+                        validarDuplicadosGlobales()
+                        mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = ""
+                    }) { Text("Añadir todo y editar manual", color = Color.Gray) }
                 }
-            }
+            },
+            dismissButton = { TextButton(onClick = { mostrarDialogoConflictos = false }) { Text("CANCELAR IMPORTACIÓN") } }
         )
     }
 }
