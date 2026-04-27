@@ -122,7 +122,7 @@ fun PantallaJuego(
                 delay(1000L)
                 tiempoRestante--
                 if (tiempoRestante <= 0) {
-                    ganadores = "IMPOSTORES"
+                    ganadores = "IMPOSTOR"
                     mensajeVictoria = "¡Se agotó el tiempo! Los impostores han ganado por sigilo."
                     fase = FaseJuego.RESULTADOS
                 }
@@ -277,7 +277,7 @@ fun PantallaJuego(
                         if (indiceHablando == 0) {
                             rondaActual++
                             if (opciones.limiteRondas && rondaActual > opciones.rondas) {
-                                ganadores = "IMPOSTORES"
+                                ganadores = "IMPOSTOR"
                                 mensajeVictoria = "¡Límite de rondas alcanzado! Los impostores ganan."
                                 fase = FaseJuego.RESULTADOS
                             }
@@ -294,7 +294,7 @@ fun PantallaJuego(
 
             FaseJuego.RESULTADOS -> {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("GANAN LOS", fontSize = 20.sp, color = Color.Gray)
+                    Text("VICTORIA PARA", fontSize = 20.sp, color = Color.Gray)
                     Text(ganadores, fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = if(ganadores == "CIVILES") Color(0xFF18C1A8) else Color(0xFFFF3D00))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(mensajeVictoria, textAlign = TextAlign.Center, fontSize = 18.sp)
@@ -325,7 +325,7 @@ fun PantallaJuego(
                     ganadores = "CIVILES"
                     mensajeVictoria = "¡Increíble! Habéis descubierto a $nombreExpulsado."
                 } else {
-                    ganadores = "IMPOSTORES"
+                    ganadores = "IMPOSTOR"
                     mensajeVictoria = "¡ERROR! $nombreExpulsado era inocente. Los impostores ganan."
                 }
                 fase = FaseJuego.RESULTADOS

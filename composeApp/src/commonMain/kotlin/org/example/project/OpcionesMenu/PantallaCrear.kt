@@ -107,6 +107,7 @@ fun PantallaCrear(
 
     // --- NUEVO: ESTADOS PARA EL BUSCADOR DE IMÁGENES ---
     var palabraBuscandoImagen by remember { mutableStateOf<PalabraUI?>(null) }
+    var contextoBusquedaImagen by remember { mutableStateOf("") } // 👇 NUEVO: Guarda el nombre del grupo si lo hay
     var mostrarBuscadorImagen by remember { mutableStateOf(false) }
 
     // --- FUNCIONES DE UTILIDAD ---
@@ -140,6 +141,28 @@ fun PantallaCrear(
                         if (cLimpia.isNotEmpty() && !pistasVistas.add(cLimpia)) {
                             p.errorPista = true; p.mensajeErrorPista = "Repetida"
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // 👇 LÓGICA DE FUSIÓN (Intacta) 👇
+    fun aplicarYFusionarElementos(nuevos: List<ElementoUI>) {
+        nuevos.forEach { nuevo ->
+            when (nuevo) {
+                is ElementoUI.Individual -> elementos.add(nuevo)
+                is ElementoUI.Conjunto -> {
+                    val grupoExistente = elementos.filterIsInstance<ElementoUI.Conjunto>()
+                        .find { it.nombre.equals(nuevo.nombre, ignoreCase = true) }
+
+                    if (grupoExistente != null) {
+                        val palabrasEnExistente = grupoExistente.palabras.map { it.palabra.lowercase() }.toSet()
+                        val palabrasAAñadir = nuevo.palabras.filter { it.palabra.lowercase() !in palabrasEnExistente }
+                        grupoExistente.palabras.addAll(palabrasAAñadir)
+                        grupoExistente.expandido = true
+                    } else {
+                        elementos.add(nuevo)
                     }
                 }
             }
@@ -185,7 +208,7 @@ fun PantallaCrear(
             elementosPendientesImportar = nuevosElementos
             mostrarDialogoConflictos = true
         } else {
-            elementos.addAll(nuevosElementos)
+            aplicarYFusionarElementos(nuevosElementos)
             validarDuplicadosGlobales()
             mostrarDialogoImportar = false; textoAImportar = ""
             coroutineScope.launch { snackbarHostState.showSnackbar("Elementos importados con éxito") }
@@ -199,7 +222,6 @@ fun PantallaCrear(
 
             coleccionParaEditar.elementos.forEach { el ->
                 when (el) {
-                    // 👇 Se carga la imagenUrl guardada
                     is ElementoGuardado.Individual -> elementos.add(ElementoUI.Individual(PalabraUI(el.palabra, el.pista, el.imagenUrl)))
                     is ElementoGuardado.Conjunto -> {
                         val nuevoConjunto = ElementoUI.Conjunto(el.nombreConjunto)
@@ -286,7 +308,6 @@ fun PantallaCrear(
                             } else {
                                 val elementosGuardables = elementos.map { ui ->
                                     when (ui) {
-                                        // 👇 Se guarda la imagenUrl
                                         is ElementoUI.Individual -> ElementoGuardado.Individual(ui.data.palabra.capitalizarPrimeraCrear(), ui.data.pista.capitalizarPrimeraCrear(), ui.data.imagenUrl)
                                         is ElementoUI.Conjunto -> ElementoGuardado.Conjunto(ui.nombre.capitalizarPrimeraCrear(), ui.palabras.map { p -> ElementoGuardado.Individual(p.palabra.capitalizarPrimeraCrear(), p.pista.capitalizarPrimeraCrear(), p.imagenUrl) })
                                     }
@@ -360,10 +381,10 @@ fun PantallaCrear(
                                         label = { Text("Palabra Secreta") }, keyboardOptions = opcionesTeclado,
                                         isError = elemento.data.errorPalabra,
                                         supportingText = { if(elemento.data.errorPalabra) Text(elemento.data.mensajeErrorPalabra, color = MaterialTheme.colorScheme.error) },
-                                        // 👇 ICONO PARA BUSCAR IMAGEN Y PREVIEW
                                         trailingIcon = {
                                             IconButton(onClick = {
                                                 palabraBuscandoImagen = elemento.data
+                                                contextoBusquedaImagen = "" // 👇 No hay grupo, contexto vacío
                                                 mostrarBuscadorImagen = true
                                             }) {
                                                 if (elemento.data.imagenUrl != null) {
@@ -414,14 +435,14 @@ fun PantallaCrear(
                                                             value = p.palabra, onValueChange = { p.palabra = it; validarDuplicadosGlobales() },
                                                             placeholder = { Text("Palabra") }, keyboardOptions = opcionesTeclado, isError = p.errorPalabra,
                                                             supportingText = { if(p.errorPalabra) Text(p.mensajeErrorPalabra, color = MaterialTheme.colorScheme.error) },
-                                                            // 👇 ICONO PARA BUSCAR IMAGEN Y PREVIEW EN CONJUNTOS
                                                             trailingIcon = {
                                                                 IconButton(onClick = {
                                                                     palabraBuscandoImagen = p
+                                                                    contextoBusquedaImagen = elemento.nombre // 👇 AQUÍ SE GUARDA EL NOMBRE DEL GRUPO (Ej: Black Clover)
                                                                     mostrarBuscadorImagen = true
                                                                 }) {
                                                                     if (p.imagenUrl != null) {
-                                                                        KamelImage(resource = asyncPainterResource(p.imagenUrl!!), contentDescription = "Imagen", modifier = Modifier.size(28.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                                                                        KamelImage(resource = asyncPainterResource(p.imagenUrl!!), contentDescription = "Imagen", modifier = Modifier.size(28.dp).clip(CircleShape), contentScale = ContentScale.Fit)
                                                                     } else {
                                                                         Icon(Icons.Rounded.ImageSearch, contentDescription = "Buscar Imagen", tint = Color(0xFF18C1A8))
                                                                     }
@@ -473,7 +494,10 @@ fun PantallaCrear(
     // 1. Buscador de Imágenes (AHORA EN DIALOG PARA SCROLL FLUIDO)
     if (mostrarBuscadorImagen && palabraBuscandoImagen != null) {
         val palabraBuscada = palabraBuscandoImagen!!.palabra.ifBlank { "paisaje" }
-        val urlGoogleImages = "https://www.google.com/search?tbm=isch&q=${palabraBuscada.replace(" ", "+")}"
+
+        // 👇 AQUÍ ESTÁ LA MEJORA FINAL: Solo se suma el nombre del grupo si la palabra está dentro de uno.
+        val queryFinal = if (contextoBusquedaImagen.isNotBlank()) "$palabraBuscada $contextoBusquedaImagen" else palabraBuscada
+        val urlGoogleImages = "https://www.google.com/search?tbm=isch&q=${queryFinal.replace(" ", "+")}"
 
         Dialog(
             onDismissRequest = { mostrarBuscadorImagen = false },
@@ -538,7 +562,7 @@ fun PantallaCrear(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
                         ) {
-                            Text("CAPTURAR", fontWeight = FontWeight.Bold)
+                            Text("SAVE", fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -567,9 +591,9 @@ fun PantallaCrear(
     if (mostrarDialogoConflictos) {
         AlertDialog(onDismissRequest = { mostrarDialogoConflictos = false }, title = { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Warning, null, tint = Color(0xFFFF6D00)); Spacer(Modifier.width(8.dp)); Text("¡Palabras repetidas!") } }, text = { Text("Algunas de las palabras que intentas importar ya existen. ¿Qué deseas hacer?") }, confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { val palabrasNuevasLowercase = elementosPendientesImportar.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet(); elementos.forEach { el -> if (el is ElementoUI.Individual && palabrasNuevasLowercase.contains(el.data.palabra.lowercase())) { el.data.palabra = "" }; if (el is ElementoUI.Conjunto) { el.palabras.removeAll { palabrasNuevasLowercase.contains(it.palabra.lowercase()) } } }; elementos.removeAll { it is ElementoUI.Individual && it.data.palabra.isEmpty() }; elementos.addAll(elementosPendientesImportar); validarDuplicadosGlobales(); mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = "" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text("Reemplazar antiguas") }
-                Button(onClick = { val palabrasActuales = elementos.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet(); val elementosLimpios = elementosPendientesImportar.mapNotNull { el -> when (el) { is ElementoUI.Individual -> if (palabrasActuales.contains(el.data.palabra.lowercase())) null else el; is ElementoUI.Conjunto -> { val palabrasFiltradas = el.palabras.filterNot { palabrasActuales.contains(it.palabra.lowercase()) }; if (palabrasFiltradas.isNotEmpty()) { val nuevoCol = ElementoUI.Conjunto(el.nombre).apply { palabras.addAll(palabrasFiltradas); expandido=true }; nuevoCol } else null } } }; elementos.addAll(elementosLimpios); validarDuplicadosGlobales(); mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = "" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C))) { Text("Omitir nuevas repetidas") }
-                OutlinedButton(onClick = { elementos.addAll(elementosPendientesImportar); validarDuplicadosGlobales(); mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = "" }) { Text("Añadir todo y editar manual", color = Color.Gray) }
+                Button(onClick = { val palabrasNuevasLowercase = elementosPendientesImportar.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet(); elementos.forEach { el -> if (el is ElementoUI.Individual && palabrasNuevasLowercase.contains(el.data.palabra.lowercase())) { el.data.palabra = "" }; if (el is ElementoUI.Conjunto) { el.palabras.removeAll { palabrasNuevasLowercase.contains(it.palabra.lowercase()) } } }; elementos.removeAll { it is ElementoUI.Individual && it.data.palabra.isEmpty() }; aplicarYFusionarElementos(elementosPendientesImportar); validarDuplicadosGlobales(); mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = "" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text("Reemplazar antiguas") }
+                Button(onClick = { val palabrasActuales = elementos.flatMap { if (it is ElementoUI.Individual) listOf(it.data.palabra.lowercase()) else (it as ElementoUI.Conjunto).palabras.map { p -> p.palabra.lowercase() } }.toSet(); val elementosLimpios = elementosPendientesImportar.mapNotNull { el -> when (el) { is ElementoUI.Individual -> if (palabrasActuales.contains(el.data.palabra.lowercase())) null else el; is ElementoUI.Conjunto -> { val palabrasFiltradas = el.palabras.filterNot { palabrasActuales.contains(it.palabra.lowercase()) }; if (palabrasFiltradas.isNotEmpty()) { val nuevoCol = ElementoUI.Conjunto(el.nombre).apply { palabras.addAll(palabrasFiltradas); expandido=true }; nuevoCol } else null } } }; aplicarYFusionarElementos(elementosLimpios); validarDuplicadosGlobales(); mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = "" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C))) { Text("Omitir nuevas repetidas") }
+                OutlinedButton(onClick = { aplicarYFusionarElementos(elementosPendientesImportar); validarDuplicadosGlobales(); mostrarDialogoConflictos = false; mostrarDialogoImportar = false; textoAImportar = "" }) { Text("Añadir todo y editar manual", color = Color.Gray) }
             }
         }, dismissButton = { TextButton(onClick = { mostrarDialogoConflictos = false }) { Text("CANCELAR IMPORTACIÓN") } })
     }
