@@ -25,6 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.project.Datos.*
@@ -468,75 +470,85 @@ fun PantallaCrear(
 
     // --- DIÁLOGOS ---
 
-    // 1. Buscador de Imágenes en BottomSheet (EL TRUCO DE INGENIERÍA)
+    // 1. Buscador de Imágenes (AHORA EN DIALOG PARA SCROLL FLUIDO)
     if (mostrarBuscadorImagen && palabraBuscandoImagen != null) {
-        val palabraBuscada = palabraBuscandoImagen!!.palabra.ifBlank { "paisaje" } // Fallback si está vacío
+        val palabraBuscada = palabraBuscandoImagen!!.palabra.ifBlank { "paisaje" }
         val urlGoogleImages = "https://www.google.com/search?tbm=isch&q=${palabraBuscada.replace(" ", "+")}"
 
-        ModalBottomSheet(
+        Dialog(
             onDismissRequest = { mostrarBuscadorImagen = false },
-            modifier = Modifier.fillMaxHeight(0.9f) // Ocupa el 90% de la pantalla
+            properties = DialogProperties(usePlatformDefaultWidth = false) // Permite ocupar el ancho completo
         ) {
-            val webViewState = rememberWebViewState(urlGoogleImages)
-            val navigator = rememberWebViewNavigator()
+            // Usamos un Surface para imitar el estilo de la cortina, pero fijo
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 32.dp), // Deja un pequeño margen arriba
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = Color.White
+            ) {
+                val webViewState = rememberWebViewState(urlGoogleImages)
+                val navigator = rememberWebViewNavigator()
 
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Barra de control del WebView
-                Row(
-                    modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F5F5)).padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = { mostrarBuscadorImagen = false }) {
-                        Text("Cerrar", color = Color.Gray)
-                    }
-                    Text("Selecciona una imagen", fontWeight = FontWeight.Bold)
-                    Button(
-                        onClick = {
-                            // 👇 SCRIPT PARA EXTRAER LA URL DE LA IMAGEN
-                            coroutineScope.launch {
-                                // ¡AQUÍ ESTABA EL ERROR! Cambiamos webViewState por navigator
-                                navigator.evaluateJavaScript(
-                                    """
-                (function() {
-                    var imgs = document.querySelectorAll('img');
-                    var maxArea = 0;
-                    var bestSrc = '';
-                    imgs.forEach(function(img) {
-                        var rect = img.getBoundingClientRect();
-                        var area = rect.width * rect.height;
-                        if(area > maxArea && img.src && img.src.startsWith('http') && !img.src.includes('gstatic')) {
-                            maxArea = area;
-                            bestSrc = img.src;
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Barra de control del WebView
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF0F5F5))
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { mostrarBuscadorImagen = false }) {
+                            Text("Cerrar", color = Color.Gray)
                         }
-                    });
-                    return bestSrc;
-                })();
-                """.trimIndent()
-                                ) { result: String? -> // <- Añadimos : String? por seguridad
-                                    val urlLimpia = result?.trim('"', '\'')
-                                    if (!urlLimpia.isNullOrEmpty() && urlLimpia != "null") {
-                                        palabraBuscandoImagen!!.imagenUrl = urlLimpia
-                                        mostrarBuscadorImagen = false
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Imagen seleccionada") }
-                                    } else {
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Abre la imagen en grande primero") }
+                        Text("Selecciona una imagen", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    navigator.evaluateJavaScript(
+                                        """
+                                        (function() {
+                                            var imgs = document.querySelectorAll('img');
+                                            var maxArea = 0;
+                                            var bestSrc = '';
+                                            imgs.forEach(function(img) {
+                                                var rect = img.getBoundingClientRect();
+                                                var area = rect.width * rect.height;
+                                                if(area > maxArea && img.src && img.src.startsWith('http') && !img.src.includes('gstatic')) {
+                                                    maxArea = area;
+                                                    bestSrc = img.src;
+                                                }
+                                            });
+                                            return bestSrc;
+                                        })();
+                                        """.trimIndent()
+                                    ) { result: String? ->
+                                        val urlLimpia = result?.trim('"', '\'')
+                                        if (!urlLimpia.isNullOrEmpty() && urlLimpia != "null") {
+                                            palabraBuscandoImagen!!.imagenUrl = urlLimpia
+                                            mostrarBuscadorImagen = false
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Imagen seleccionada") }
+                                        } else {
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Abre la imagen en grande primero") }
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
-                    ) {
-                        Text("CAPTURAR", fontWeight = FontWeight.Bold)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
+                        ) {
+                            Text("CAPTURAR", fontWeight = FontWeight.Bold)
+                        }
                     }
-                }
 
-                // El Navegador incrustado
-                WebView(
-                    state = webViewState,
-                    navigator = navigator,
-                    modifier = Modifier.fillMaxSize().weight(1f)
-                )
+                    // El Navegador incrustado
+                    WebView(
+                        state = webViewState,
+                        navigator = navigator,
+                        modifier = Modifier.fillMaxSize().weight(1f)
+                    )
+                }
             }
         }
     }
