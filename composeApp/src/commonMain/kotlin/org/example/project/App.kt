@@ -124,6 +124,11 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                     onGestionarJugadores = {
                         pantallaAnteriorJugadores = PantallaNavegacion.INICIO
                         pantallaActual = PantallaNavegacion.JUGADORES
+                    },
+                    // 👇 ESTO ES LO QUE FALTABA PARA QUE NO DE ERROR
+                    onCrearLista = {
+                        coleccionAEditar = null
+                        pantallaActual = PantallaNavegacion.CREAR
                     }
                 )
                 PantallaNavegacion.BIBLIOTECA -> PantallaBiblioteca(
