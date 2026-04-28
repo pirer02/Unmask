@@ -44,11 +44,11 @@ fun String.capitalizarPrimeraCrear(): String {
     return this.trim().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
 }
 
-// --- MODELOS DE ESTADO (Añadido imagenUrl) ---
+// --- MODELOS DE ESTADO ---
 class PalabraUI(palabraIni: String = "", pistaIni: String = "", imagenIni: String? = null) {
     var palabra by mutableStateOf(palabraIni)
     var pista by mutableStateOf(pistaIni)
-    var imagenUrl by mutableStateOf(imagenIni) // NUEVO: Estado de la imagen
+    var imagenUrl by mutableStateOf(imagenIni)
 
     var errorPalabra by mutableStateOf(false)
     var mensajeErrorPalabra by mutableStateOf("")
@@ -82,10 +82,16 @@ fun PantallaCrear(
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    val usuarioActual by GestorAuth.usuario.collectAsState()
+
     var estaCargando by remember { mutableStateOf(true) }
 
     var nombreColeccion by remember { mutableStateOf("") }
     var categoriaColeccion by remember { mutableStateOf("") }
+
+    var esPublica by remember { mutableStateOf(coleccionParaEditar?.esPublica ?: false) }
+    var mostrarDialogoPrivacidad by remember { mutableStateOf(false) }
+    var estadoDeseadoPrivacidad by remember { mutableStateOf(false) }
 
     var errorNombreCol by remember { mutableStateOf(false) }
     var mensajeErrorNombreCol by remember { mutableStateOf("") }
@@ -105,12 +111,10 @@ fun PantallaCrear(
     var indiceParaBorrar by remember { mutableStateOf<Int?>(null) }
     var tituloDialogoBorrado by remember { mutableStateOf("") }
 
-    // --- NUEVO: ESTADOS PARA EL BUSCADOR DE IMÁGENES ---
     var palabraBuscandoImagen by remember { mutableStateOf<PalabraUI?>(null) }
-    var contextoBusquedaImagen by remember { mutableStateOf("") } // 👇 NUEVO: Guarda el nombre del grupo si lo hay
+    var contextoBusquedaImagen by remember { mutableStateOf("") }
     var mostrarBuscadorImagen by remember { mutableStateOf(false) }
 
-    // --- FUNCIONES DE UTILIDAD ---
     fun validarDuplicadosGlobales() {
         val palabrasVistas = mutableSetOf<String>()
         val pistasVistas = mutableSetOf<String>()
@@ -147,7 +151,6 @@ fun PantallaCrear(
         }
     }
 
-    // 👇 LÓGICA DE FUSIÓN (Intacta) 👇
     fun aplicarYFusionarElementos(nuevos: List<ElementoUI>) {
         nuevos.forEach { nuevo ->
             when (nuevo) {
@@ -306,22 +309,37 @@ fun PantallaCrear(
                                     snackbarHostState.showSnackbar("Faltan campos por rellenar o hay errores")
                                 }
                             } else {
-                                val elementosGuardables = elementos.map { ui ->
-                                    when (ui) {
-                                        is ElementoUI.Individual -> ElementoGuardado.Individual(ui.data.palabra.capitalizarPrimeraCrear(), ui.data.pista.capitalizarPrimeraCrear(), ui.data.imagenUrl)
-                                        is ElementoUI.Conjunto -> ElementoGuardado.Conjunto(ui.nombre.capitalizarPrimeraCrear(), ui.palabras.map { p -> ElementoGuardado.Individual(p.palabra.capitalizarPrimeraCrear(), p.pista.capitalizarPrimeraCrear(), p.imagenUrl) })
+                                coroutineScope.launch {
+                                    val elementosGuardables = elementos.map { ui ->
+                                        when (ui) {
+                                            is ElementoUI.Individual -> ElementoGuardado.Individual(ui.data.palabra.capitalizarPrimeraCrear(), ui.data.pista.capitalizarPrimeraCrear(), ui.data.imagenUrl)
+                                            is ElementoUI.Conjunto -> ElementoGuardado.Conjunto(ui.nombre.capitalizarPrimeraCrear(), ui.palabras.map { p -> ElementoGuardado.Individual(p.palabra.capitalizarPrimeraCrear(), p.pista.capitalizarPrimeraCrear(), p.imagenUrl) })
+                                        }
                                     }
+
+                                    val nombreAutor = if (usuarioActual != null) GestorAuth.obtenerNombreUsuario(usuarioActual!!.uid) else null
+
+                                    // 👇 SE PRESERVA LA LISTA DE LIKES PARA NO PERDERLOS AL EDITAR 👇
+                                    val nuevaLista = ColeccionGuardada(
+                                        nombre = nombreColeccion.capitalizarPrimeraCrear(),
+                                        categoria = categoriaColeccion.capitalizarPrimeraCrear(),
+                                        elementos = elementosGuardables,
+                                        esPublica = esPublica,
+                                        idCreador = usuarioActual?.uid,
+                                        nombreCreador = nombreAutor,
+                                        likes = coleccionParaEditar?.likes ?: 0,
+                                        usuariosLikes = coleccionParaEditar?.usuariosLikes ?: emptyList()
+                                    )
+
+                                    if (coleccionParaEditar != null) GestorDatos.actualizarColeccion(coleccionParaEditar.nombre, nuevaLista)
+                                    else GestorDatos.guardarNuevaColeccion(nuevaLista)
+
+                                    if (usuarioActual != null) {
+                                        GestorDatos.subirColeccionNube(usuarioActual!!.uid, nuevaLista)
+                                    }
+
+                                    onGuardadoExitoso()
                                 }
-
-                                val nuevaLista = ColeccionGuardada(nombreColeccion.capitalizarPrimeraCrear(), categoriaColeccion.capitalizarPrimeraCrear(), elementosGuardables)
-
-                                if (coleccionParaEditar != null) GestorDatos.actualizarColeccion(coleccionParaEditar.nombre, nuevaLista)
-                                else GestorDatos.guardarNuevaColeccion(nuevaLista)
-
-                                val usuarioLogueado = GestorAuth.usuario.value
-                                if (usuarioLogueado != null) coroutineScope.launch { GestorDatos.subirColeccionNube(usuarioLogueado.uid, nuevaLista) }
-
-                                onGuardadoExitoso()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
@@ -353,6 +371,51 @@ fun PantallaCrear(
                                 OutlinedTextField(value = nombreColeccion, onValueChange = { nombreColeccion = it; errorNombreCol = false }, label = { Text("Nombre de la Lista") }, keyboardOptions = opcionesTeclado, isError = errorNombreCol, modifier = Modifier.fillMaxWidth(), singleLine = true)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedTextField(value = categoriaColeccion, onValueChange = { categoriaColeccion = it; errorCategoriaCol = false }, label = { Text("Categoría (Ej: Películas)") }, keyboardOptions = opcionesTeclado, isError = errorCategoriaCol, modifier = Modifier.fillMaxWidth(), singleLine = true)
+
+                                Spacer(modifier = Modifier.height(16.dp))
+                                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        if (usuarioActual == null) {
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Debes iniciar sesión para publicar listas.") }
+                                        } else {
+                                            estadoDeseadoPrivacidad = !esPublica
+                                            mostrarDialogoPrivacidad = true
+                                        }
+                                    },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (esPublica) Icons.Rounded.Public else Icons.Rounded.Lock,
+                                            contentDescription = null,
+                                            tint = if (esPublica) Color(0xFF18C1A8) else Color.Gray
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text(if (esPublica) "Lista Pública" else "Lista Privada", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text(
+                                                if (esPublica) "Cualquiera podrá encontrarla y jugarla" else "Solo tú puedes ver esta lista",
+                                                fontSize = 11.sp, color = Color.Gray
+                                            )
+                                        }
+                                    }
+                                    Switch(
+                                        checked = esPublica,
+                                        onCheckedChange = {
+                                            if (usuarioActual == null) {
+                                                coroutineScope.launch { snackbarHostState.showSnackbar("Inicia sesión primero.") }
+                                            } else {
+                                                estadoDeseadoPrivacidad = it
+                                                mostrarDialogoPrivacidad = true
+                                            }
+                                        },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF18C1A8))
+                                    )
+                                }
                             }
                         }
                     }
@@ -384,7 +447,7 @@ fun PantallaCrear(
                                         trailingIcon = {
                                             IconButton(onClick = {
                                                 palabraBuscandoImagen = elemento.data
-                                                contextoBusquedaImagen = "" // 👇 No hay grupo, contexto vacío
+                                                contextoBusquedaImagen = ""
                                                 mostrarBuscadorImagen = true
                                             }) {
                                                 if (elemento.data.imagenUrl != null) {
@@ -438,7 +501,7 @@ fun PantallaCrear(
                                                             trailingIcon = {
                                                                 IconButton(onClick = {
                                                                     palabraBuscandoImagen = p
-                                                                    contextoBusquedaImagen = elemento.nombre // 👇 AQUÍ SE GUARDA EL NOMBRE DEL GRUPO (Ej: Black Clover)
+                                                                    contextoBusquedaImagen = elemento.nombre
                                                                     mostrarBuscadorImagen = true
                                                                 }) {
                                                                     if (p.imagenUrl != null) {
@@ -479,7 +542,6 @@ fun PantallaCrear(
             }
         }
 
-        // --- BOTONES FLOTANTES ALINEADOS ABAJO A LA DERECHA ---
         Column(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
             val canScrollUp = listState.canScrollBackward
             val canScrollDown = listState.canScrollForward
@@ -489,25 +551,60 @@ fun PantallaCrear(
         }
     }
 
-    // --- DIÁLOGOS ---
+    if (mostrarDialogoPrivacidad) {
+        val hacerPublica = estadoDeseadoPrivacidad
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoPrivacidad = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (hacerPublica) Icons.Rounded.Public else Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = if (hacerPublica) Color(0xFF18C1A8) else Color(0xFFFF6D00)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (hacerPublica) "¿Publicar esta lista?" else "¿Hacer privada?")
+                }
+            },
+            text = {
+                Text(
+                    text = if (hacerPublica)
+                        "Al publicar esta lista, cualquier persona en la comunidad podrá verla, jugarla y descargarla. Tu nombre de investigador aparecerá como el creador oficial.\n\nPodrás deshacer esto más adelante."
+                    else
+                        "Si haces esta lista privada, desaparecerá inmediatamente del explorador de la comunidad y solo tú podrás verla o jugarla.",
+                    fontSize = 15.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        esPublica = estadoDeseadoPrivacidad
+                        mostrarDialogoPrivacidad = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (hacerPublica) Color(0xFF18C1A8) else Color(0xFFFF6D00))
+                ) {
+                    Text("CONFIRMAR")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoPrivacidad = false }) {
+                    Text("CANCELAR", color = Color.Gray)
+                }
+            }
+        )
+    }
 
-    // 1. Buscador de Imágenes (AHORA EN DIALOG PARA SCROLL FLUIDO)
     if (mostrarBuscadorImagen && palabraBuscandoImagen != null) {
         val palabraBuscada = palabraBuscandoImagen!!.palabra.ifBlank { "paisaje" }
-
-        // 👇 AQUÍ ESTÁ LA MEJORA FINAL: Solo se suma el nombre del grupo si la palabra está dentro de uno.
         val queryFinal = if (contextoBusquedaImagen.isNotBlank()) "$palabraBuscada $contextoBusquedaImagen" else palabraBuscada
         val urlGoogleImages = "https://www.google.com/search?tbm=isch&q=${queryFinal.replace(" ", "+")}"
 
         Dialog(
             onDismissRequest = { mostrarBuscadorImagen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false) // Permite ocupar el ancho completo
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            // Usamos un Surface para imitar el estilo de la cortina, pero fijo
             Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 32.dp), // Deja un pequeño margen arriba
+                modifier = Modifier.fillMaxSize().padding(top = 32.dp),
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                 color = Color.White
             ) {
@@ -515,18 +612,12 @@ fun PantallaCrear(
                 val navigator = rememberWebViewNavigator()
 
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Barra de control del WebView
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFF0F5F5))
-                            .padding(8.dp),
+                        modifier = Modifier.fillMaxWidth().background(Color(0xFFF0F5F5)).padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = { mostrarBuscadorImagen = false }) {
-                            Text("Cerrar", color = Color.Gray)
-                        }
+                        TextButton(onClick = { mostrarBuscadorImagen = false }) { Text("Cerrar", color = Color.Gray) }
                         Text("Selecciona una imagen", fontWeight = FontWeight.Bold)
                         Button(
                             onClick = {
@@ -561,33 +652,22 @@ fun PantallaCrear(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
-                        ) {
-                            Text("SAVE", fontWeight = FontWeight.Bold)
-                        }
+                        ) { Text("SAVE", fontWeight = FontWeight.Bold) }
                     }
-
-                    // El Navegador incrustado
-                    WebView(
-                        state = webViewState,
-                        navigator = navigator,
-                        modifier = Modifier.fillMaxSize().weight(1f)
-                    )
+                    WebView(state = webViewState, navigator = navigator, modifier = Modifier.fillMaxSize().weight(1f))
                 }
             }
         }
     }
 
-    // 2. Diálogo de Borrado Normal
     if (indiceParaBorrar != null) {
         AlertDialog(onDismissRequest = { indiceParaBorrar = null }, title = { Text("¿Eliminar $tituloDialogoBorrado?") }, text = { Text("¿Estás seguro de que quieres borrar este elemento? Se perderán todos los datos.") }, confirmButton = { TextButton(onClick = { indiceParaBorrar?.let { elementos.removeAt(it) }; indiceParaBorrar = null; validarDuplicadosGlobales() }) { Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { indiceParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) } })
     }
 
-    // 3. Diálogo Importar Bloque de Texto
     if (mostrarDialogoImportar) {
         AlertDialog(onDismissRequest = { mostrarDialogoImportar = false }, title = { Text("Importar Palabras") }, text = { Column { Text("Pega el texto con el formato:\n.NombreGrupo\nPalabra, Pista\nO palabras individuales sueltas.", fontSize = 14.sp, color = Color.Gray); Spacer(modifier = Modifier.height(8.dp)); OutlinedTextField(value = textoAImportar, onValueChange = { textoAImportar = it }, modifier = Modifier.fillMaxWidth().height(150.dp), placeholder = { Text("Pega aquí...") }) } }, confirmButton = { TextButton(onClick = { procesarTextoImportacion(textoAImportar) }) { Text("PROCESAR", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { mostrarDialogoImportar = false }) { Text("CANCELAR", color = Color.Gray) } })
     }
 
-    // 4. Diálogo de Resolución de Conflictos
     if (mostrarDialogoConflictos) {
         AlertDialog(onDismissRequest = { mostrarDialogoConflictos = false }, title = { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Warning, null, tint = Color(0xFFFF6D00)); Spacer(Modifier.width(8.dp)); Text("¡Palabras repetidas!") } }, text = { Text("Algunas de las palabras que intentas importar ya existen. ¿Qué deseas hacer?") }, confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {

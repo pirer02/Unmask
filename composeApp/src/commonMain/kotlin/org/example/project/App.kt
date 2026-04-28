@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 
 // Importamos todos los datos necesarios
 import org.example.project.Datos.*
+import org.example.project.PantallaMiPerfil
 
 enum class PantallaNavegacion {
     INICIO, BIBLIOTECA, CREAR, EXPLORAR, PERFIL, CONFIG_JUEGO, JUGADORES, JUEGO
@@ -27,7 +28,7 @@ data class OpcionesJuego(
     val rondas: Int,
     val limiteTiempo: Boolean,
     val tiempoMinutos: Int,
-    val sinRepeticiones: Boolean = false // 👇 NUEVO: Parámetro para no repetir
+    val sinRepeticiones: Boolean = false
 )
 
 @Composable
@@ -100,7 +101,6 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                 PantallaNavegacion.INICIO -> PantallaInicio(
                     onJugar = { coleccion ->
                         coleccionParaJugar = coleccion
-                        // 👇 NUEVO: Limpiamos la memoria de palabras si empezamos de cero
                         GestorDatos.palabrasUsadasSesion.clear()
                         opcionesConfiguradas = null
                         pantallaActual = PantallaNavegacion.CONFIG_JUEGO
@@ -139,7 +139,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                         PantallaConfiguracion(
                             coleccion = coleccion,
                             jugadores = jugadoresGlobales,
-                            opcionesIniciales = opcionesConfiguradas, // 👇 Pasamos las opciones guardadas si venimos del juego
+                            opcionesIniciales = opcionesConfiguradas,
                             snackbarHostState = snackbarHostState,
                             onIrAJugadores = { pantallaAnteriorJugadores = PantallaNavegacion.CONFIG_JUEGO; pantallaActual = PantallaNavegacion.JUGADORES },
                             onIniciarJuego = { opciones -> opcionesConfiguradas = opciones; pantallaActual = PantallaNavegacion.JUEGO },
@@ -154,12 +154,27 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                             coleccion = coleccionParaJugar!!,
                             jugadores = jugadoresGlobales.toList(),
                             opciones = opcionesConfiguradas!!,
-                            // 👇 CAMBIO CLAVE: Al terminar la partida, volvemos a la configuración
                             onSalir = { pantallaActual = PantallaNavegacion.CONFIG_JUEGO }
                         )
                     }
                 }
-                PantallaNavegacion.EXPLORAR -> PantallaEnConstruccion("Explorar")
+
+                // 👇 CAMBIO AQUÍ: Conectamos la PantallaExplorar
+                // 👇 CAMBIO AQUÍ: Conectamos la PantallaExplorar
+                PantallaNavegacion.EXPLORAR -> PantallaExplorar(
+                    onVolver = { pantallaActual = PantallaNavegacion.INICIO }, // 👈 AÑADE ESTA LÍNEA
+                    onIrAPerfilLogin = { pantallaActual = PantallaNavegacion.PERFIL },
+                    onJugarColeccion = { coleccion ->
+                        coleccionParaJugar = coleccion
+                        GestorDatos.palabrasUsadasSesion.clear()
+                        opcionesConfiguradas = null
+                        pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                    },
+                    onEditar = { coleccion ->
+                        coleccionAEditar = coleccion
+                        pantallaActual = PantallaNavegacion.CREAR
+                    }
+                )
 
                 PantallaNavegacion.PERFIL -> {
                     PantallaMiPerfil(

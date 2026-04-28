@@ -14,7 +14,13 @@ import org.example.project.Datos.GestorAuth
 data class ColeccionGuardada(
     val nombre: String,
     val categoria: String,
-    val elementos: List<ElementoGuardado>
+    val elementos: List<ElementoGuardado>,
+    val idCreador: String? = null,
+    val nombreCreador: String? = null,
+    val likes: Int = 0,
+    val usuariosLikes: List<String> = emptyList(), // 👇 NUEVO: Registra quién dio Like
+    val esPublica: Boolean = false,
+    val esDescargada: Boolean = false
 )
 
 @Serializable
@@ -31,28 +37,28 @@ object GestorDatos {
     private const val KEY_COLECCIONES = "mis_colecciones_v1"
     private const val KEY_JUGADORES = "mis_jugadores_v1"
 
+    // 👇 Evita que la app se rompa al leer datos antiguos a los que les faltan campos
+    private val jsonConfig = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
     val coleccionesGlobales = mutableStateListOf<ColeccionGuardada>()
     val jugadoresGlobales = mutableStateListOf<String>()
 
-    // 👇 NUEVO: Registro temporal de palabras usadas en la sesión actual
     val palabrasUsadasSesion = mutableStateListOf<String>()
 
     fun cargarDatos() {
-        // Cargar Colecciones
         val jsonColecciones = settings.getString(KEY_COLECCIONES, "")
         if (jsonColecciones.isNotEmpty()) {
             try {
-                val datos = Json.decodeFromString<List<ColeccionGuardada>>(jsonColecciones)
+                val datos = jsonConfig.decodeFromString<List<ColeccionGuardada>>(jsonColecciones)
                 coleccionesGlobales.clear()
                 coleccionesGlobales.addAll(datos)
             } catch (e: Exception) { println("Error cargar colecciones: ${e.message}") }
         }
 
-        // Cargar Jugadores
         val jsonJugadores = settings.getString(KEY_JUGADORES, "")
         if (jsonJugadores.isNotEmpty()) {
             try {
-                val datosJugadores = Json.decodeFromString<List<String>>(jsonJugadores)
+                val datosJugadores = jsonConfig.decodeFromString<List<String>>(jsonJugadores)
                 jugadoresGlobales.clear()
                 jugadoresGlobales.addAll(datosJugadores)
             } catch (e: Exception) { println("Error cargar jugadores: ${e.message}") }
@@ -60,10 +66,10 @@ object GestorDatos {
     }
 
     fun guardarCambiosMemoria() {
-        val jsonColecciones = Json.encodeToString(coleccionesGlobales.toList())
+        val jsonColecciones = jsonConfig.encodeToString(coleccionesGlobales.toList())
         settings.putString(KEY_COLECCIONES, jsonColecciones)
 
-        val jsonJugadores = Json.encodeToString(jugadoresGlobales.toList())
+        val jsonJugadores = jsonConfig.encodeToString(jugadoresGlobales.toList())
         settings.putString(KEY_JUGADORES, jsonJugadores)
     }
 
@@ -85,8 +91,6 @@ object GestorDatos {
         guardarCambiosMemoria()
     }
 
-    // --- FUNCIONES DE FIREBASE ---
-
     fun limpiarDatosLocales() {
         coleccionesGlobales.clear()
         jugadoresGlobales.clear()
@@ -95,7 +99,6 @@ object GestorDatos {
 
     suspend fun descargarDatosNube(uid: String) {
         try {
-            // A. Descargar Colecciones
             val snapshot = GestorAuth.firestore
                 .collection("usuarios")
                 .document(uid)
@@ -106,16 +109,18 @@ object GestorDatos {
             coleccionesGlobales.clear()
             coleccionesGlobales.addAll(coleccionesNube)
 
-            // B. Descargar Jugadores
             val docUsuario = GestorAuth.firestore.collection("usuarios").document(uid).get()
             if (docUsuario.exists) {
                 try {
                     val jugadoresNube = docUsuario.get<List<String>>("jugadores")
                     jugadoresGlobales.clear()
                     jugadoresGlobales.addAll(jugadoresNube)
-                } catch (e: Exception) { /* No hay jugadores aún */ }
+                } catch (e: Exception) { }
             }
             guardarCambiosMemoria()
+
+            // 👇 NUEVO: Después de descargar tus datos, actualiza las listas de otros autores
+            sincronizarColeccionesDescargadas(uid)
         } catch (e: Exception) { println("Error descarga nube: ${e.message}") }
     }
 
@@ -135,7 +140,6 @@ object GestorDatos {
             GestorAuth.firestore.collection("usuarios").document(uid)
                 .update(mapOf("jugadores" to jugadoresGlobales.toList()))
         } catch (e: Exception) {
-            // Si el documento no existe, usamos set
             GestorAuth.firestore.collection("usuarios").document(uid)
                 .set(mapOf("jugadores" to jugadoresGlobales.toList()), merge = true)
         }
@@ -153,7 +157,65 @@ object GestorDatos {
                         palabras = elemPre.palabras.map { ElementoGuardado.Individual(it.palabra, it.pista, null) }
                     )
                 }
-            }
+            },
+            nombreCreador = "Unmask Oficial",
+            esPublica = true
         )
+    }
+
+    // 👇 NUEVO: Motor de sincronización de listas descargadas
+    suspend fun sincronizarColeccionesDescargadas(miUid: String) {
+        var huboCambios = false
+        // Hacemos una copia de la lista para iterar sin fallos de concurrencia
+        val copiasLocales = coleccionesGlobales.toList()
+
+        for (coleccion in copiasLocales) {
+            // Solo comprobamos las que son online y sabemos quién las creó
+            if (coleccion.esDescargada && coleccion.idCreador != null) {
+                try {
+                    val doc = GestorAuth.firestore
+                        .collection("usuarios")
+                        .document(coleccion.idCreador)
+                        .collection("colecciones")
+                        .document(coleccion.nombre)
+                        .get()
+
+                    if (doc.exists) {
+                        val coleccionOriginal = doc.data<ColeccionGuardada>()
+
+                        if (coleccionOriginal.esPublica) {
+                            // 1. Sigue existiendo y es pública: Actualizamos las palabras
+                            val actualizada = coleccion.copy(
+                                elementos = coleccionOriginal.elementos,
+                                likes = coleccionOriginal.likes,
+                                categoria = coleccionOriginal.categoria
+                            )
+                            if (coleccion != actualizada) {
+                                val index = coleccionesGlobales.indexOfFirst { it.nombre == coleccion.nombre }
+                                if (index != -1) coleccionesGlobales[index] = actualizada
+                                subirColeccionNube(miUid, actualizada) // Guardamos el cambio en TU base de datos
+                                huboCambios = true
+                            }
+                        } else {
+                            // 2. El autor la puso Privada: Se elimina de tu biblioteca
+                            coleccionesGlobales.remove(coleccion)
+                            try { GestorAuth.firestore.collection("usuarios").document(miUid).collection("colecciones").document(coleccion.nombre).delete() } catch(e:Exception){}
+                            huboCambios = true
+                        }
+                    } else {
+                        // 3. El autor la borró por completo: Se elimina de tu biblioteca
+                        coleccionesGlobales.remove(coleccion)
+                        try { GestorAuth.firestore.collection("usuarios").document(miUid).collection("colecciones").document(coleccion.nombre).delete() } catch(e:Exception){}
+                        huboCambios = true
+                    }
+                } catch (e: Exception) {
+                    // Si falla la red, la dejamos como está hasta la próxima vez
+                }
+            }
+        }
+
+        if (huboCambios) {
+            guardarCambiosMemoria()
+        }
     }
 }

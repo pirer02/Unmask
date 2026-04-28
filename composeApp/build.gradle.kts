@@ -59,6 +59,9 @@ kotlin {
             // 👇 NUEVO: Librería para el WebView Multiplataforma
             implementation("io.github.kevinnzou:compose-webview-multiplatform:1.9.40")
 
+            // Implementacion de reduccion de imagenes camara y galeria
+            implementation("io.github.onseok:peekaboo-image-picker:0.5.2")
+
             implementation("io.ktor:ktor-client-core:2.3.11")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
             implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
