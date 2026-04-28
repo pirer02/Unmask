@@ -6,6 +6,7 @@ import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.firestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 
 data class PerfilSocial(
     val uid: String = "",
@@ -13,6 +14,16 @@ data class PerfilSocial(
     val fotoPerfil: String? = null,
     val seguidores: List<String> = emptyList(),
     val seguidos: List<String> = emptyList()
+)
+
+// 👇 NUEVO: Estructura para las invitaciones
+@Serializable
+data class InvitacionColaboracion(
+    val id: String = "",
+    val uidEmisor: String = "",
+    val nombreEmisor: String = "",
+    val uidDestino: String = "",
+    val nombreLista: String = ""
 )
 
 object GestorAuth {
@@ -78,27 +89,22 @@ object GestorAuth {
         } catch (e: Exception) { false }
     }
 
-    // 👇 CORREGIDO: Borrado brutal e infalible
     suspend fun eliminarCuentaDefinitiva(uid: String): Boolean {
         return try {
             val user = auth.currentUser ?: return false
             val username = obtenerNombreUsuario(uid)
 
-            // 1. Arrasamos con sus listas públicas y privadas
             try {
                 val colecciones = firestore.collection("usuarios").document(uid).collection("colecciones").get()
                 colecciones.documents.forEach { it.reference.delete() }
             } catch (e: Exception) { }
 
-            // 2. Arrasamos con su documento principal
             try { firestore.collection("usuarios").document(uid).delete() } catch (e: Exception) { }
 
-            // 3. Liberamos su nombre para que otro lo pueda usar
             try {
                 if (username != null) firestore.collection("nombres_usuario").document(username).delete()
             } catch (e: Exception) { }
 
-            // 4. Intentamos borrar el usuario de Auth. Si falla por seguridad, al menos le cerramos la sesión
             try { user.delete() } catch (e: Exception) { }
 
             auth.signOut()
@@ -171,7 +177,6 @@ object GestorAuth {
             val snapshot = firestore.collection("usuarios").document(uid).collection("colecciones").get()
             snapshot.documents
                 .map { it.data<ColeccionGuardada>() }
-                // 👇 AÑADIDO: && !it.esDescargada para no mostrar las que este usuario guardó de otros
                 .filter { it.esPublica && !it.esDescargada }
         } catch (e: Exception) { emptyList() }
     }
@@ -182,7 +187,6 @@ object GestorAuth {
 
             snapshot.documents
                 .map { it.data<ColeccionGuardada>() }
-                // 👇 AÑADIDO: && !it.esDescargada para ignorar las copias de todos los usuarios
                 .filter { it.esPublica && it.idCreador != miUid && !it.esDescargada }
                 .shuffled()
                 .take(limite)
@@ -212,6 +216,67 @@ object GestorAuth {
             } else {
                 false
             }
+        } catch (e: Exception) { false }
+    }
+
+    // 👇 NUEVOS MÉTODOS PARA COLABORACIÓN 👇
+
+    suspend fun enviarInvitacionColaboracion(uidEmisor: String, nombreEmisor: String, uidDestino: String, nombreLista: String): Boolean {
+        return try {
+            val idInvitacion = "${uidEmisor}_${uidDestino}_${nombreLista.replace(" ", "_")}"
+            val invitacion = InvitacionColaboracion(
+                id = idInvitacion,
+                uidEmisor = uidEmisor,
+                nombreEmisor = nombreEmisor,
+                uidDestino = uidDestino,
+                nombreLista = nombreLista
+            )
+            firestore.collection("invitaciones").document(idInvitacion).set(invitacion)
+            true
+        } catch (e: Exception) { false }
+    }
+
+    suspend fun obtenerInvitacionesPendientes(miUid: String): List<InvitacionColaboracion> {
+        return try {
+            // Obtenemos los documentos y filtramos con la sintaxis segura de Kotlin
+            val snapshot = firestore.collection("invitaciones").get()
+            snapshot.documents
+                .map { it.data<InvitacionColaboracion>() }
+                .filter { it.uidDestino == miUid }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    suspend fun responderInvitacion(invitacion: InvitacionColaboracion, aceptada: Boolean): Boolean {
+        return try {
+            if (aceptada) {
+                // 1. Buscamos la lista original del creador
+                val docRef = firestore.collection("usuarios")
+                    .document(invitacion.uidEmisor)
+                    .collection("colecciones")
+                    .document(invitacion.nombreLista)
+
+                val doc = docRef.get()
+                if (doc.exists) {
+                    val coleccionOriginal = doc.data<ColeccionGuardada>()
+                    val nuevosColaboradores = coleccionOriginal.colaboradores.toMutableList()
+
+                    if (!nuevosColaboradores.contains(invitacion.uidDestino)) {
+                        nuevosColaboradores.add(invitacion.uidDestino)
+                        // 2. Actualizamos al creador con el nuevo colaborador
+                        docRef.update(mapOf("colaboradores" to nuevosColaboradores))
+
+                        // 3. Guardamos una copia en la nube del invitado marcada como esColaboracion = true
+                        val copiaParaInvitado = coleccionOriginal.copy(
+                            colaboradores = nuevosColaboradores,
+                            esColaboracion = true
+                        )
+                        GestorDatos.subirColeccionNube(invitacion.uidDestino, copiaParaInvitado)
+                    }
+                }
+            }
+            // 4. Borramos la invitación tanto si acepta como si rechaza
+            firestore.collection("invitaciones").document(invitacion.id).delete()
+            true
         } catch (e: Exception) { false }
     }
 }

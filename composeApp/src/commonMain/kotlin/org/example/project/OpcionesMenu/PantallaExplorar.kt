@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Image as ComposeImage
-import org.example.project.decodificarBase64Imagen // 👈 Importa la función que creamos antes
+import org.example.project.decodificarBase64Imagen
 import org.example.project.Datos.*
 
 enum class VistaExplorar {
@@ -49,7 +49,10 @@ fun PantallaExplorar(
 
     var vistaActual by remember { mutableStateOf(VistaExplorar.FEED) }
 
-    var textoBusquedaUsuarios by remember { mutableStateOf("") }
+    // 👇 NUEVO: Estados unificados del buscador
+    var textoBusqueda by remember { mutableStateOf("") }
+    var tipoBusqueda by remember { mutableStateOf("Listas") } // "Listas" o "Usuarios"
+
     var resultadosBusqueda by remember { mutableStateOf<List<PerfilSocial>>(emptyList()) }
     var buscandoUsuarios by remember { mutableStateOf(false) }
 
@@ -65,7 +68,6 @@ fun PantallaExplorar(
     var vistaLimitada100 by remember { mutableStateOf(true) }
 
     var coleccionViendoInfo by remember { mutableStateOf<ColeccionGuardada?>(null) }
-    // 👇 NUEVO: Estado para el diálogo de confirmación al borrar una descarga
     var coleccionParaBorrarDescarga by remember { mutableStateOf<ColeccionGuardada?>(null) }
 
     LaunchedEffect(usuario, vistaActual) {
@@ -76,13 +78,14 @@ fun PantallaExplorar(
         }
     }
 
-    LaunchedEffect(textoBusquedaUsuarios) {
-        if (textoBusquedaUsuarios.length >= 2) {
+    // 👇 NUEVO: Solo busca usuarios en la BD si la pestaña activa es "Usuarios"
+    LaunchedEffect(textoBusqueda, tipoBusqueda) {
+        if (tipoBusqueda == "Usuarios" && textoBusqueda.length >= 2) {
             buscandoUsuarios = true
             delay(600)
-            resultadosBusqueda = GestorAuth.buscarUsuariosPorNombre(textoBusquedaUsuarios, usuario?.uid)
+            resultadosBusqueda = GestorAuth.buscarUsuariosPorNombre(textoBusqueda, usuario?.uid)
             buscandoUsuarios = false
-        } else {
+        } else if (tipoBusqueda == "Usuarios") {
             resultadosBusqueda = emptyList()
         }
     }
@@ -91,7 +94,7 @@ fun PantallaExplorar(
         scope.launch {
             cargandoPerfil = true
             vistaActual = VistaExplorar.PERFIL_USUARIO
-            textoBusquedaUsuarios = ""
+            textoBusqueda = ""
 
             val perfil = GestorAuth.obtenerPerfilSocial(uidDestino)
             if (perfil != null) {
@@ -164,14 +167,43 @@ fun PantallaExplorar(
                     when (vistaActual) {
                         VistaExplorar.FEED -> {
                             Column(modifier = Modifier.fillMaxSize()) {
+
+                                // 👇 1. Pestañas para elegir qué buscar (AHORA ESTÁN ARRIBA)
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                    FilterChip(
+                                        selected = tipoBusqueda == "Listas",
+                                        onClick = { tipoBusqueda = "Listas"; textoBusqueda = "" },
+                                        label = { Text("Listas", fontWeight = FontWeight.Bold) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF18C1A8),
+                                            selectedLabelColor = Color.White
+                                        ),
+                                        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = tipoBusqueda == "Listas", borderColor = Color.Transparent)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    FilterChip(
+                                        selected = tipoBusqueda == "Usuarios",
+                                        onClick = { tipoBusqueda = "Usuarios"; textoBusqueda = "" },
+                                        label = { Text("Usuarios", fontWeight = FontWeight.Bold) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF18C1A8),
+                                            selectedLabelColor = Color.White
+                                        ),
+                                        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = tipoBusqueda == "Usuarios", borderColor = Color.Transparent)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // 👇 2. BÚSQUEDA UNIFICADA (AHORA ESTÁ DEBAJO)
                                 OutlinedTextField(
-                                    value = textoBusquedaUsuarios,
-                                    onValueChange = { textoBusquedaUsuarios = it },
-                                    placeholder = { Text("Buscar usuarios...") },
+                                    value = textoBusqueda,
+                                    onValueChange = { textoBusqueda = it },
+                                    // El texto cambiará solo según la pestaña activa
+                                    placeholder = { Text(if (tipoBusqueda == "Listas") "Buscar listas..." else "Buscar investigadores...") },
                                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
                                     trailingIcon = {
-                                        if (textoBusquedaUsuarios.isNotEmpty()) {
-                                            IconButton(onClick = { textoBusquedaUsuarios = "" }) { Icon(Icons.Rounded.Clear, null) }
+                                        if (textoBusqueda.isNotEmpty()) {
+                                            IconButton(onClick = { textoBusqueda = "" }) { Icon(Icons.Rounded.Clear, null) }
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(50)),
@@ -184,59 +216,71 @@ fun PantallaExplorar(
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                if (textoBusquedaUsuarios.isNotEmpty()) {
-                                    if (buscandoUsuarios) {
-                                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(color = Color(0xFFFF6D00))
-                                        }
-                                    } else if (resultadosBusqueda.isEmpty()) {
-                                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                            Text("No se encontraron investigadores", color = Color.Gray)
+                                // 👇 3. Lógica de visualización (A PARTIR DE AQUÍ TODO SIGUE IGUAL)
+                                if (tipoBusqueda == "Usuarios") {
+                                    if (textoBusqueda.isEmpty()) {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                            Text("Escribe un nombre para buscar investigadores.", color = Color.Gray, modifier = Modifier.padding(top = 32.dp))
                                         }
                                     } else {
-                                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-                                            items(resultadosBusqueda) { perfil ->
-                                                TarjetaUsuarioBuscado(
-                                                    perfil = perfil,
-                                                    onClick = { abrirPerfil(perfil.uid) }
-                                                )
-                                                Spacer(modifier = Modifier.height(8.dp))
+                                        if (buscandoUsuarios) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                CircularProgressIndicator(color = Color(0xFFFF6D00))
+                                            }
+                                        } else if (resultadosBusqueda.isEmpty()) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("No se encontraron investigadores", color = Color.Gray)
+                                            }
+                                        } else {
+                                            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+                                                items(resultadosBusqueda) { perfil ->
+                                                    TarjetaUsuarioBuscado(
+                                                        perfil = perfil,
+                                                        onClick = { abrirPerfil(perfil.uid) }
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                }
                                             }
                                         }
                                     }
                                 } else {
-                                    LazyRow(
-                                        contentPadding = PaddingValues(0.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    ) {
-                                        val filtros = listOf("Nuevas", "Populares", "Más palabras")
-                                        items(filtros) { filtro ->
-                                            FilterChip(
-                                                selected = filtroSeleccionado == filtro,
-                                                onClick = { filtroSeleccionado = filtro },
-                                                label = { Text(filtro) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = Color(0xFFFF6D00),
-                                                    selectedLabelColor = Color.White
+                                    // PESTAÑA: LISTAS
+                                    if (textoBusqueda.isEmpty()) {
+                                        LazyRow(
+                                            contentPadding = PaddingValues(0.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        ) {
+                                            val filtros = listOf("Nuevas", "Populares", "Más palabras")
+                                            items(filtros) { filtro ->
+                                                FilterChip(
+                                                    selected = filtroSeleccionado == filtro,
+                                                    onClick = { filtroSeleccionado = filtro },
+                                                    label = { Text(filtro) },
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = Color(0xFFFF6D00),
+                                                        selectedLabelColor = Color.White
+                                                    )
                                                 )
-                                            )
+                                            }
+                                            item {
+                                                FilterChip(
+                                                    selected = !vistaLimitada100,
+                                                    onClick = {
+                                                        vistaLimitada100 = !vistaLimitada100
+                                                        scope.launch {
+                                                            cargandoFeed = true
+                                                            feedGlobal = GestorAuth.obtenerFeedGlobal(if (vistaLimitada100) 100 else 500, usuario?.uid)
+                                                            cargandoFeed = false
+                                                        }
+                                                    },
+                                                    label = { Text("Ver todo") },
+                                                    leadingIcon = { Icon(Icons.Rounded.AllInclusive, null, modifier = Modifier.size(16.dp)) }
+                                                )
+                                            }
                                         }
-                                        item {
-                                            FilterChip(
-                                                selected = !vistaLimitada100,
-                                                onClick = {
-                                                    vistaLimitada100 = !vistaLimitada100
-                                                    scope.launch {
-                                                        cargandoFeed = true
-                                                        feedGlobal = GestorAuth.obtenerFeedGlobal(if (vistaLimitada100) 100 else 500, usuario?.uid)
-                                                        cargandoFeed = false
-                                                    }
-                                                },
-                                                label = { Text("Ver todo") },
-                                                leadingIcon = { Icon(Icons.Rounded.AllInclusive, null, modifier = Modifier.size(16.dp)) }
-                                            )
-                                        }
+                                    } else {
+                                        Text("Resultados para '$textoBusqueda'", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                                     }
 
                                     if (cargandoFeed) {
@@ -248,53 +292,67 @@ fun PantallaExplorar(
                                             Text("No hay listas públicas en la comunidad aún.", color = Color.Gray)
                                         }
                                     } else {
-                                        val feedOrdenado = when (filtroSeleccionado) {
-                                            "Populares" -> feedGlobal.sortedByDescending { it.likes }
-                                            "Más palabras" -> feedGlobal.sortedByDescending { col -> col.elementos.sumOf { if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size } }
-                                            else -> feedGlobal
+                                        // Filtramos si hay texto, si no, ordenamos según el chip normal
+                                        val feedMostrado = if (textoBusqueda.isNotEmpty()) {
+                                            feedGlobal.filter {
+                                                it.nombre.contains(textoBusqueda, ignoreCase = true) ||
+                                                        it.categoria.contains(textoBusqueda, ignoreCase = true) ||
+                                                        (it.nombreCreador?.contains(textoBusqueda, ignoreCase = true) == true)
+                                            }
+                                        } else {
+                                            when (filtroSeleccionado) {
+                                                "Populares" -> feedGlobal.sortedByDescending { it.likes }
+                                                "Más palabras" -> feedGlobal.sortedByDescending { col -> col.elementos.sumOf { if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size } }
+                                                else -> feedGlobal
+                                            }
                                         }
 
-                                        LazyColumn(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                                        ) {
-                                            items(feedOrdenado) { coleccion ->
-                                                TarjetaComunidad(
-                                                    coleccion = coleccion,
-                                                    autor = coleccion.nombreCreador ?: "Anónimo",
-                                                    miUid = usuario?.uid,
-                                                    onAutorClick = {
-                                                        coleccion.idCreador?.let { uid -> abrirPerfil(uid) }
-                                                    },
-                                                    onJugar = { onJugarColeccion(coleccion) },
-                                                    onDescargar = {
-                                                        // 👇 NUEVO: Comprobamos si la lista ya está guardada para mostrar aviso o descargar
-                                                        val yaDescargada = GestorDatos.coleccionesGlobales.any { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
-                                                        if (yaDescargada) {
-                                                            coleccionParaBorrarDescarga = coleccion
-                                                        } else {
-                                                            val copiaParaMi = coleccion.copy(esDescargada = true)
-                                                            GestorDatos.guardarNuevaColeccion(copiaParaMi)
-                                                            scope.launch {
-                                                                usuario?.uid?.let { miUid ->
-                                                                    GestorDatos.subirColeccionNube(miUid, copiaParaMi)
-                                                                }
-                                                                snackbarHostState.showSnackbar("Guardada en tu biblioteca online")
-                                                            }
-                                                        }
-                                                    },
-                                                    onLike = { sumar ->
-                                                        coleccion.idCreador?.let { uidAutor ->
-                                                            usuario?.uid?.let { miUid ->
+                                        if (feedMostrado.isEmpty() && textoBusqueda.isNotEmpty()) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("No hay listas que coincidan con tu búsqueda.", color = Color.Gray)
+                                            }
+                                        } else {
+                                            LazyColumn(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+                                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                            ) {
+                                                items(feedMostrado) { coleccion ->
+                                                    TarjetaComunidad(
+                                                        coleccion = coleccion,
+                                                        autor = coleccion.nombreCreador ?: "Anónimo",
+                                                        miUid = usuario?.uid,
+                                                        onAutorClick = {
+                                                            coleccion.idCreador?.let { uid -> abrirPerfil(uid) }
+                                                        },
+                                                        onJugar = { onJugarColeccion(coleccion) },
+                                                        onDescargar = {
+                                                            val yaDescargada = GestorDatos.coleccionesGlobales.any { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
+                                                            if (yaDescargada) {
+                                                                coleccionParaBorrarDescarga = coleccion
+                                                            } else {
+                                                                val copiaParaMi = coleccion.copy(esDescargada = true)
+                                                                GestorDatos.guardarNuevaColeccion(copiaParaMi)
                                                                 scope.launch {
-                                                                    GestorAuth.darLike(uidAutor, coleccion.nombre, miUid, sumar)
+                                                                    usuario?.uid?.let { miUid ->
+                                                                        GestorDatos.subirColeccionNube(miUid, copiaParaMi)
+                                                                    }
+                                                                    snackbarHostState.showSnackbar("Guardada en tu biblioteca online")
                                                                 }
                                                             }
-                                                        }
-                                                    },
-                                                    onInfo = { coleccionViendoInfo = coleccion }
-                                                )
+                                                        },
+                                                        onLike = { sumar ->
+                                                            coleccion.idCreador?.let { uidAutor ->
+                                                                usuario?.uid?.let { miUid ->
+                                                                    scope.launch {
+                                                                        GestorAuth.darLike(uidAutor, coleccion.nombre, miUid, sumar)
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        onInfo = { coleccionViendoInfo = coleccion }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -329,7 +387,6 @@ fun PantallaExplorar(
                                                             if (urlFoto.startsWith("http")) {
                                                                 KamelImage(asyncPainterResource(urlFoto), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                                                             } else {
-                                                                // 👇 NUEVO: Decodificar si es Base64
                                                                 val bitmap = decodificarBase64Imagen(urlFoto)
                                                                 if (bitmap != null) {
                                                                     ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
@@ -419,7 +476,6 @@ fun PantallaExplorar(
                                                     onAutorClick = null,
                                                     onJugar = { onJugarColeccion(coleccion) },
                                                     onDescargar = {
-                                                        // 👇 NUEVO: Mismo control para el botón desde el Perfil de Usuario
                                                         val yaDescargada = GestorDatos.coleccionesGlobales.any { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
                                                         if (yaDescargada) {
                                                             coleccionParaBorrarDescarga = coleccion
@@ -462,7 +518,6 @@ fun PantallaExplorar(
         )
     }
 
-    // 👇 NUEVO: Diálogo de alerta si intentan borrar una lista desde la pantalla explorar
     if (coleccionParaBorrarDescarga != null) {
         AlertDialog(
             onDismissRequest = { coleccionParaBorrarDescarga = null },
@@ -473,11 +528,8 @@ fun PantallaExplorar(
                     coleccionParaBorrarDescarga?.let { col ->
                         val colLocal = GestorDatos.coleccionesGlobales.find { it.nombre == col.nombre && it.idCreador == col.idCreador }
                         if (colLocal != null) {
-                            // Borrado en el teléfono
                             GestorDatos.coleccionesGlobales.remove(colLocal)
                             GestorDatos.guardarCambiosMemoria()
-
-                            // Borrado en Firebase
                             scope.launch {
                                 usuario?.uid?.let { miUid ->
                                     try {
@@ -574,7 +626,6 @@ fun TarjetaUsuarioBuscado(perfil: PerfilSocial, onClick: () -> Unit) {
                     if (urlFoto.startsWith("http")) {
                         KamelImage(asyncPainterResource(urlFoto), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                     } else {
-                        // 👇 NUEVO: Decodificar si es Base64
                         val bitmap = decodificarBase64Imagen(urlFoto)
                         if (bitmap != null) {
                             ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
@@ -617,7 +668,6 @@ fun TarjetaComunidad(
     var likeDado by remember { mutableStateOf(miUid != null && coleccion.usuariosLikes.contains(miUid)) }
     var likesActuales by remember { mutableStateOf(coleccion.likes) }
 
-    // 👇 NUEVO: Consultamos en tiempo real si esta tarjeta específica ya está descargada
     val estaDescargada = GestorDatos.coleccionesGlobales.any { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
 
     Card(
@@ -673,12 +723,11 @@ fun TarjetaComunidad(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 👇 NUEVO: El icono cambia de CloudDownload a CloudDone si la tenemos
                 IconButton(onClick = onDescargar, modifier = Modifier.size(36.dp)) {
                     Icon(
                         imageVector = if (estaDescargada) Icons.Rounded.CloudDone else Icons.Rounded.CloudDownload,
                         contentDescription = if (estaDescargada) "Eliminar descarga" else "Descargar",
-                        tint = if (estaDescargada) Color(0xFF00897B) else Color(0xFF18C1A8) // Un tono un poco más oscuro si ya la tienes
+                        tint = if (estaDescargada) Color(0xFF00897B) else Color(0xFF18C1A8)
                     )
                 }
                 Spacer(Modifier.width(8.dp))

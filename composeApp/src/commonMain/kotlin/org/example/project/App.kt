@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // Importamos todos los datos necesarios
 import org.example.project.Datos.*
@@ -63,6 +64,21 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
 
     val jugadoresGlobales = GestorDatos.jugadoresGlobales
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // 👇 NUEVO: ESTADOS PARA EL RADAR DE INVITACIONES
+    val usuarioAuth by GestorAuth.usuario.collectAsState()
+    var invitacionPendiente by remember { mutableStateOf<InvitacionColaboracion?>(null) }
+
+    // 👇 NUEVO: LANZADOR DEL RADAR
+    LaunchedEffect(usuarioAuth) {
+        if (usuarioAuth != null) {
+            val pendientes = GestorAuth.obtenerInvitacionesPendientes(usuarioAuth!!.uid)
+            if (pendientes.isNotEmpty()) {
+                invitacionPendiente = pendientes.first()
+            }
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -158,11 +174,8 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                         )
                     }
                 }
-
-                // 👇 CAMBIO AQUÍ: Conectamos la PantallaExplorar
-                // 👇 CAMBIO AQUÍ: Conectamos la PantallaExplorar
                 PantallaNavegacion.EXPLORAR -> PantallaExplorar(
-                    onVolver = { pantallaActual = PantallaNavegacion.INICIO }, // 👈 AÑADE ESTA LÍNEA
+                    onVolver = { pantallaActual = PantallaNavegacion.INICIO },
                     onIrAPerfilLogin = { pantallaActual = PantallaNavegacion.PERFIL },
                     onJugarColeccion = { coleccion ->
                         coleccionParaJugar = coleccion
@@ -175,7 +188,6 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                         pantallaActual = PantallaNavegacion.CREAR
                     }
                 )
-
                 PantallaNavegacion.PERFIL -> {
                     PantallaMiPerfil(
                         onVolver = { pantallaActual = PantallaNavegacion.INICIO },
@@ -194,6 +206,45 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                 }
             }
         }
+    }
+
+    // 👇 NUEVO: DIÁLOGO PARA RESPONDER A LA INVITACIÓN
+    if (invitacionPendiente != null) {
+        AlertDialog(
+            onDismissRequest = { }, // Forzamos respuesta
+            icon = { Icon(Icons.Rounded.Handshake, contentDescription = null, tint = Color(0xFF18C1A8)) },
+            title = { Text("¡Nueva Colaboración!") },
+            text = {
+                Text("El investigador @${invitacionPendiente?.nombreEmisor} quiere que le ayudes a rellenar su lista '${invitacionPendiente?.nombreLista}'.\n\nSi aceptas, podrás editarla y aparecerá en tu biblioteca como propia.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val inv = invitacionPendiente!!
+                            val exito = GestorAuth.responderInvitacion(inv, true)
+                            if (exito) {
+                                snackbarHostState.showSnackbar("¡Ahora eres colaborador de ${inv.nombreLista}!")
+                                // Actualizamos la biblioteca para que aparezca la nueva lista
+                                usuarioAuth?.uid?.let { GestorDatos.descargarDatosNube(it) }
+                            }
+                            invitacionPendiente = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
+                ) { Text("ACEPTAR") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            GestorAuth.responderInvitacion(invitacionPendiente!!, false)
+                            invitacionPendiente = null
+                        }
+                    }
+                ) { Text("RECHAZAR", color = Color.Gray) }
+            }
+        )
     }
 }
 

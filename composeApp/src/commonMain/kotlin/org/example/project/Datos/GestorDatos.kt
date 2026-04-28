@@ -20,7 +20,10 @@ data class ColeccionGuardada(
     val likes: Int = 0,
     val usuariosLikes: List<String> = emptyList(), // 👇 NUEVO: Registra quién dio Like
     val esPublica: Boolean = false,
-    val esDescargada: Boolean = false
+    val esDescargada: Boolean = false,
+    // 👇 NUEVOS CAMPOS PARA COLABORACIÓN
+    val colaboradores: List<String> = emptyList(), // UIDs de los usuarios invitados
+    val esColaboracion: Boolean = false // True si esta lista es de un amigo que te invitó
 )
 
 @Serializable
@@ -126,12 +129,38 @@ object GestorDatos {
 
     suspend fun subirColeccionNube(uid: String, coleccion: ColeccionGuardada) {
         try {
+            // 1. Guardado normal en tu propia nube
             GestorAuth.firestore
                 .collection("usuarios")
                 .document(uid)
                 .collection("colecciones")
                 .document(coleccion.nombre)
                 .set(coleccion)
+
+            // 👇 NUEVO: SINCRONIZACIÓN COLABORATIVA
+            // 2. Si tú eres el invitado, actualízale la lista al creador original para que vea tus cambios
+            if (coleccion.esColaboracion && coleccion.idCreador != null && coleccion.idCreador != uid) {
+                val coleccionParaCreador = coleccion.copy(esColaboracion = false)
+                GestorAuth.firestore
+                    .collection("usuarios")
+                    .document(coleccion.idCreador)
+                    .collection("colecciones")
+                    .document(coleccion.nombre)
+                    .set(coleccionParaCreador)
+            }
+
+            // 3. Si tú eres el creador y tienes invitados, actualízales la lista a todos ellos
+            if (!coleccion.esColaboracion && coleccion.colaboradores.isNotEmpty()) {
+                val coleccionParaInvitado = coleccion.copy(esColaboracion = true)
+                coleccion.colaboradores.forEach { colabUid ->
+                    GestorAuth.firestore
+                        .collection("usuarios")
+                        .document(colabUid)
+                        .collection("colecciones")
+                        .document(coleccion.nombre)
+                        .set(coleccionParaInvitado)
+                }
+            }
         } catch (e: Exception) { println("Error subida lista: ${e.message}") }
     }
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.project.Datos.*
 
@@ -77,6 +78,13 @@ fun PantallaMiPerfil(
     var mostrarDialogoMigracion by remember { mutableStateOf(false) }
     var coleccionParaBorrar by remember { mutableStateOf<ColeccionGuardada?>(null) }
 
+    // 👇 NUEVO: ESTADOS PARA COMPARTIR / COLABORACIÓN
+    var mostrarDialogoCompartir by remember { mutableStateOf(false) }
+    var coleccionACompartir by remember { mutableStateOf<ColeccionGuardada?>(null) }
+    var textoBusquedaAmigo by remember { mutableStateOf("") }
+    var resultadosAmigos by remember { mutableStateOf<List<PerfilSocial>>(emptyList()) }
+    var buscandoAmigos by remember { mutableStateOf(false) }
+
     var mostrarMenuFoto by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     var mostrarBuscadorAvatar by remember { mutableStateOf(false) }
@@ -111,6 +119,18 @@ fun PantallaMiPerfil(
             }
         }
     )
+
+    // 👇 NUEVO: Lógica de búsqueda para el diálogo de compartir
+    LaunchedEffect(textoBusquedaAmigo) {
+        if (textoBusquedaAmigo.length >= 2) {
+            buscandoAmigos = true
+            delay(600)
+            resultadosAmigos = GestorAuth.buscarUsuariosPorNombre(textoBusquedaAmigo, usuarioAuth?.uid)
+            buscandoAmigos = false
+        } else {
+            resultadosAmigos = emptyList()
+        }
+    }
 
     LaunchedEffect(usuarioAuth) {
         if (usuarioAuth == null) {
@@ -585,10 +605,16 @@ fun PantallaMiPerfil(
                                                     } else {
                                                         misListasOrdenadas.forEach { col ->
                                                             TarjetaColeccionPerfil(
-                                                                col,
-                                                                { coleccionParaBorrar = col },
-                                                                { onEditar(col) },
-                                                                { onJugar(col) })
+                                                                coleccion = col,
+                                                                onDelete = { coleccionParaBorrar = col },
+                                                                onEdit = { onEditar(col) },
+                                                                onPlay = { onJugar(col) },
+                                                                // 👇 PASAMOS EL NUEVO EVENTO DE COMPARTIR
+                                                                onShare = {
+                                                                    coleccionACompartir = col
+                                                                    mostrarDialogoCompartir = true
+                                                                }
+                                                            )
                                                             Spacer(Modifier.height(12.dp))
                                                         }
                                                     }
@@ -689,7 +715,70 @@ fun PantallaMiPerfil(
         }
     }
 
+    // 👇 NUEVO: DIÁLOGO DE COMPARTIR / INVITAR COLABORADORES
+    if (mostrarDialogoCompartir && coleccionACompartir != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoCompartir = false; textoBusquedaAmigo = "" },
+            title = { Text("Invitar Colaborador") },
+            text = {
+                Column {
+                    Text("Añade a alguien para que te ayude a rellenar '${coleccionACompartir?.nombre}'.", fontSize = 14.sp, color = Color.Gray)
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = textoBusquedaAmigo,
+                        onValueChange = { textoBusquedaAmigo = it },
+                        placeholder = { Text("Nombre del investigador...") },
+                        leadingIcon = { Icon(Icons.Rounded.PersonSearch, null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(12.dp))
 
+                    if (buscandoAmigos) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).size(24.dp))
+                    } else if (textoBusquedaAmigo.length >= 2 && resultadosAmigos.isEmpty()) {
+                        Text("No se encontró a nadie con ese nombre.", fontSize = 12.sp, color = Color.Red)
+                    }
+
+                    LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+                        items(resultadosAmigos) { perfil ->
+                            val yaEsColab = coleccionACompartir?.colaboradores?.contains(perfil.uid) == true
+                            ListItem(
+                                headlineContent = { Text("@${perfil.username}", fontWeight = FontWeight.Bold) },
+                                trailingContent = {
+                                    if (yaEsColab) {
+                                        Icon(Icons.Rounded.CheckCircle, null, tint = Color(0xFF18C1A8))
+                                    } else {
+                                        TextButton(onClick = {
+                                            scope.launch {
+                                                val exito = GestorAuth.enviarInvitacionColaboracion(
+                                                    uidEmisor = usuarioAuth!!.uid,
+                                                    nombreEmisor = miPerfilSocial?.username ?: "investigador",
+                                                    uidDestino = perfil.uid,
+                                                    nombreLista = coleccionACompartir!!.nombre
+                                                )
+                                                if (exito) {
+                                                    snackbarHostState.showSnackbar("Invitación enviada a @${perfil.username}")
+                                                } else {
+                                                    snackbarHostState.showSnackbar("Error al enviar invitación")
+                                                }
+                                            }
+                                        }) { Text("INVITAR") }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarDialogoCompartir = false; textoBusquedaAmigo = "" }) {
+                    Text("CERRAR")
+                }
+            }
+        )
+    }
 
     if (mostrarMenuFoto) {
         ModalBottomSheet(
@@ -1002,8 +1091,6 @@ fun PantallaMiPerfil(
     }
 }
 
-
-
 @Composable
 fun ColumnaStats(valor: String, etiqueta: String, blanco: Boolean = false, onClick: () -> Unit) {
     val colorTexto = if (blanco) Color.White else Color(0xFF1A1A1A)
@@ -1022,7 +1109,9 @@ fun TarjetaColeccionPerfil(
     coleccion: ColeccionGuardada,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    // 👇 NUEVO PARÁMETRO
+    onShare: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1035,61 +1124,42 @@ fun TarjetaColeccionPerfil(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(coleccion.nombre, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            if (coleccion.esPublica) Icons.Rounded.Public else Icons.Rounded.Lock,
-                            null,
-                            modifier = Modifier.size(12.dp),
-                            tint = if (coleccion.esPublica) Color(0xFF18C1A8) else Color.Gray
-                        )
+                        // 👇 NUEVO ICONO SI ES COLABORACIÓN
+                        val iconVector = if (coleccion.esColaboracion) Icons.Rounded.Group else if (coleccion.esPublica) Icons.Rounded.Public else Icons.Rounded.Lock
+                        val iconColor = if (coleccion.esColaboracion) Color(0xFF18C1A8) else if (coleccion.esPublica) Color(0xFF18C1A8) else Color.Gray
+
+                        Icon(iconVector, null, modifier = Modifier.size(12.dp), tint = iconColor)
                         Spacer(Modifier.width(4.dp))
-                        Text(
-                            if (coleccion.esPublica) "Pública" else "Privada",
-                            fontSize = 10.sp,
-                            color = Color.Gray
-                        )
+                        Text(if (coleccion.esColaboracion) "Colaborativa" else if (coleccion.esPublica) "Pública" else "Privada", fontSize = 10.sp, color = Color.Gray)
                     }
                 }
-                if (coleccion.esPublica) {
+                if (coleccion.esPublica || coleccion.esColaboracion) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.Favorite,
-                            null,
-                            tint = Color(0xFFFF3D00),
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Icon(Icons.Rounded.Favorite, null, tint = Color(0xFFFF3D00), modifier = Modifier.size(14.dp))
                         Text(" ${coleccion.likes}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                // 👇 NUEVO BOTÓN DE COMPARTIR (solo se muestra si es el creador original)
+                if (!coleccion.esColaboracion) {
+                    IconButton(onClick = onShare) {
+                        Icon(Icons.Rounded.PersonAdd, null, tint = Color(0xFFFF6D00), modifier = Modifier.size(20.dp))
+                    }
+                }
+
                 IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        null,
-                        tint = Color.Red.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Rounded.Delete, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                 }
                 IconButton(onClick = onEdit) {
-                    Icon(
-                        Icons.Rounded.Edit,
-                        null,
-                        tint = Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Rounded.Edit, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
                 }
                 IconButton(onClick = onPlay) {
-                    Icon(
-                        Icons.Rounded.PlayArrow,
-                        null,
-                        tint = Color(0xFF18C1A8),
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(Icons.Rounded.PlayArrow, null, tint = Color(0xFF18C1A8), modifier = Modifier.size(24.dp))
                 }
             }
         }
     }
 }
 
-// ESTE ES EL PUENTE DE ANDROID. EL SUBRAYADO ROJO DESAPARECE EN EL SIGUIENTE PASO
 expect fun decodificarBase64Imagen(base64: String): ImageBitmap?
