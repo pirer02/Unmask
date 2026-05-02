@@ -35,6 +35,7 @@ sealed class ElementoGuardado {
 }
 
 // 2. EL GESTOR DE DATOS
+// 2. EL GESTOR DE DATOS
 object GestorDatos {
     private val settings = Settings()
     private const val KEY_COLECCIONES = "mis_colecciones_v1"
@@ -122,14 +123,12 @@ object GestorDatos {
             }
             guardarCambiosMemoria()
 
-            // 👇 NUEVO: Después de descargar tus datos, actualiza las listas de otros autores
             sincronizarColeccionesDescargadas(uid)
         } catch (e: Exception) { println("Error descarga nube: ${e.message}") }
     }
 
     suspend fun subirColeccionNube(uid: String, coleccion: ColeccionGuardada) {
         try {
-            // 1. Guardado normal en tu propia nube
             GestorAuth.firestore
                 .collection("usuarios")
                 .document(uid)
@@ -137,8 +136,6 @@ object GestorDatos {
                 .document(coleccion.nombre)
                 .set(coleccion)
 
-            // 👇 NUEVO: SINCRONIZACIÓN COLABORATIVA
-            // 2. Si tú eres el invitado, actualízale la lista al creador original para que vea tus cambios
             if (coleccion.esColaboracion && coleccion.idCreador != null && coleccion.idCreador != uid) {
                 val coleccionParaCreador = coleccion.copy(esColaboracion = false)
                 GestorAuth.firestore
@@ -149,7 +146,6 @@ object GestorDatos {
                     .set(coleccionParaCreador)
             }
 
-            // 3. Si tú eres el creador y tienes invitados, actualízales la lista a todos ellos
             if (!coleccion.esColaboracion && coleccion.colaboradores.isNotEmpty()) {
                 val coleccionParaInvitado = coleccion.copy(esColaboracion = true)
                 coleccion.colaboradores.forEach { colabUid ->
@@ -192,14 +188,11 @@ object GestorDatos {
         )
     }
 
-    // 👇 NUEVO: Motor de sincronización de listas descargadas
     suspend fun sincronizarColeccionesDescargadas(miUid: String) {
         var huboCambios = false
-        // Hacemos una copia de la lista para iterar sin fallos de concurrencia
         val copiasLocales = coleccionesGlobales.toList()
 
         for (coleccion in copiasLocales) {
-            // Solo comprobamos las que son online y sabemos quién las creó
             if (coleccion.esDescargada && coleccion.idCreador != null) {
                 try {
                     val doc = GestorAuth.firestore
@@ -213,7 +206,6 @@ object GestorDatos {
                         val coleccionOriginal = doc.data<ColeccionGuardada>()
 
                         if (coleccionOriginal.esPublica) {
-                            // 1. Sigue existiendo y es pública: Actualizamos las palabras
                             val actualizada = coleccion.copy(
                                 elementos = coleccionOriginal.elementos,
                                 likes = coleccionOriginal.likes,
@@ -222,29 +214,92 @@ object GestorDatos {
                             if (coleccion != actualizada) {
                                 val index = coleccionesGlobales.indexOfFirst { it.nombre == coleccion.nombre }
                                 if (index != -1) coleccionesGlobales[index] = actualizada
-                                subirColeccionNube(miUid, actualizada) // Guardamos el cambio en TU base de datos
+                                subirColeccionNube(miUid, actualizada)
                                 huboCambios = true
                             }
                         } else {
-                            // 2. El autor la puso Privada: Se elimina de tu biblioteca
                             coleccionesGlobales.remove(coleccion)
                             try { GestorAuth.firestore.collection("usuarios").document(miUid).collection("colecciones").document(coleccion.nombre).delete() } catch(e:Exception){}
                             huboCambios = true
                         }
                     } else {
-                        // 3. El autor la borró por completo: Se elimina de tu biblioteca
                         coleccionesGlobales.remove(coleccion)
                         try { GestorAuth.firestore.collection("usuarios").document(miUid).collection("colecciones").document(coleccion.nombre).delete() } catch(e:Exception){}
                         huboCambios = true
                     }
                 } catch (e: Exception) {
-                    // Si falla la red, la dejamos como está hasta la próxima vez
                 }
             }
         }
 
         if (huboCambios) {
             guardarCambiosMemoria()
+        }
+    }
+
+    // 👇 NUEVO: Función para expulsar a un colaborador de forma segura
+    suspend fun eliminarColaborador(miUid: String, coleccion: ColeccionGuardada, colabUid: String) {
+        // 1. Borramos la copia colaborativa de la nube del usuario expulsado
+        try {
+            GestorAuth.firestore
+                .collection("usuarios")
+                .document(colabUid)
+                .collection("colecciones")
+                .document(coleccion.nombre)
+                .delete()
+        } catch (e: Exception) { println("Error eliminando lista del colaborador: ${e.message}") }
+
+        // 2. Actualizamos la lista excluyendo al colaborador
+        val nuevosColaboradores = coleccion.colaboradores.filter { it != colabUid }
+        val listaActualizada = coleccion.copy(colaboradores = nuevosColaboradores)
+
+        // 3. Actualizamos en memoria local
+        val index = coleccionesGlobales.indexOfFirst { it.nombre == coleccion.nombre && it.idCreador == miUid }
+        if (index != -1) {
+            coleccionesGlobales[index] = listaActualizada
+            guardarCambiosMemoria()
+        }
+
+        // 4. Subimos los cambios a la nube del creador (y por cascada a los demás si hubiera)
+        subirColeccionNube(miUid, listaActualizada)
+    }
+
+
+    // 👇 NUEVO: Función para que un colaborador abandone una lista
+    suspend fun abandonarColaboracion(miUid: String, coleccion: ColeccionGuardada) {
+        // 1. Borramos la copia colaborativa local y de la memoria
+        val index = coleccionesGlobales.indexOfFirst { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
+        if (index != -1) {
+            coleccionesGlobales.removeAt(index)
+            guardarCambiosMemoria()
+        }
+
+        // 2. Borramos nuestra copia en nuestra base de datos (nube)
+        try {
+            GestorAuth.firestore
+                .collection("usuarios")
+                .document(miUid)
+                .collection("colecciones")
+                .document(coleccion.nombre)
+                .delete()
+        } catch (e: Exception) { println("Error borrando copia local: ${e.message}") }
+
+        // 3. Nos quitamos de la lista de colaboradores en el documento del creador original
+        coleccion.idCreador?.let { creadorUid ->
+            try {
+                val docRef = GestorAuth.firestore
+                    .collection("usuarios")
+                    .document(creadorUid)
+                    .collection("colecciones")
+                    .document(coleccion.nombre)
+
+                val doc = docRef.get()
+                if (doc.exists) {
+                    val coleccionOriginal = doc.data<ColeccionGuardada>()
+                    val nuevosColaboradores = coleccionOriginal.colaboradores.filter { it != miUid }
+                    docRef.update(mapOf("colaboradores" to nuevosColaboradores))
+                }
+            } catch (e: Exception) { println("Error actualizando al creador: ${e.message}") }
         }
     }
 }

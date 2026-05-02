@@ -13,7 +13,8 @@ data class PerfilSocial(
     val username: String = "",
     val fotoPerfil: String? = null,
     val seguidores: List<String> = emptyList(),
-    val seguidos: List<String> = emptyList()
+    val seguidos: List<String> = emptyList(),
+    val descripcion: String? = null // 👇 NUEVO
 )
 
 // 👇 NUEVO: Estructura para las invitaciones
@@ -144,10 +145,21 @@ object GestorAuth {
                 val foto = try { doc.get<String>("fotoPerfil") } catch(e: Exception) { null }
                 val seguidores = try { doc.get<List<String>>("seguidores") } catch(e: Exception) { emptyList() }
                 val seguidos = try { doc.get<List<String>>("seguidos") } catch(e: Exception) { emptyList() }
+                val descripcion = try { doc.get<String>("descripcion") } catch(e: Exception) { null } // 👇 NUEVO
 
-                PerfilSocial(uid, username, foto, seguidores, seguidos)
+                PerfilSocial(uid, username, foto, seguidores, seguidos, descripcion)
             } else null
         } catch (e: Exception) { null }
+    }
+
+    // 👇 NUEVA FUNCIÓN: Añádela debajo de obtenerPerfilSocial
+    suspend fun actualizarDescripcionPerfil(uid: String, descripcion: String): Boolean {
+        return try {
+            firestore.collection("usuarios").document(uid).update(
+                mapOf("descripcion" to descripcion)
+            )
+            true
+        } catch (e: Exception) { false }
     }
 
     suspend fun alternarSeguimiento(miUid: String, targetUid: String, seguir: Boolean): Boolean {
@@ -177,7 +189,8 @@ object GestorAuth {
             val snapshot = firestore.collection("usuarios").document(uid).collection("colecciones").get()
             snapshot.documents
                 .map { it.data<ColeccionGuardada>() }
-                .filter { it.esPublica && !it.esDescargada }
+                // 👇 CAMBIO: Añadimos !it.esColaboracion para que no salga en tu perfil público
+                .filter { it.esPublica && !it.esDescargada && !it.esColaboracion }
         } catch (e: Exception) { emptyList() }
     }
 
@@ -187,7 +200,8 @@ object GestorAuth {
 
             snapshot.documents
                 .map { it.data<ColeccionGuardada>() }
-                .filter { it.esPublica && it.idCreador != miUid && !it.esDescargada }
+                // 👇 CAMBIO: Añadimos !it.esColaboracion para que no se dupliquen en la comunidad
+                .filter { it.esPublica && it.idCreador != miUid && !it.esDescargada && !it.esColaboracion }
                 .shuffled()
                 .take(limite)
         } catch (e: Exception) { emptyList() }
@@ -219,8 +233,6 @@ object GestorAuth {
         } catch (e: Exception) { false }
     }
 
-    // 👇 NUEVOS MÉTODOS PARA COLABORACIÓN 👇
-
     suspend fun enviarInvitacionColaboracion(uidEmisor: String, nombreEmisor: String, uidDestino: String, nombreLista: String): Boolean {
         return try {
             val idInvitacion = "${uidEmisor}_${uidDestino}_${nombreLista.replace(" ", "_")}"
@@ -238,7 +250,6 @@ object GestorAuth {
 
     suspend fun obtenerInvitacionesPendientes(miUid: String): List<InvitacionColaboracion> {
         return try {
-            // Obtenemos los documentos y filtramos con la sintaxis segura de Kotlin
             val snapshot = firestore.collection("invitaciones").get()
             snapshot.documents
                 .map { it.data<InvitacionColaboracion>() }
@@ -246,10 +257,37 @@ object GestorAuth {
         } catch (e: Exception) { emptyList() }
     }
 
+    suspend fun obtenerInvitadosPendientes(uidEmisor: String, nombreLista: String): List<String> {
+        return try {
+            val snapshot = firestore.collection("invitaciones").get()
+            snapshot.documents
+                .map { it.data<InvitacionColaboracion>() }
+                .filter { it.uidEmisor == uidEmisor && it.nombreLista == nombreLista }
+                .map { it.uidDestino }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    // 👇 NUEVO: Obtener TODAS las invitaciones que YO he enviado (para mostrarlas en gestión)
+    suspend fun obtenerInvitacionesEnviadas(uidEmisor: String): List<InvitacionColaboracion> {
+        return try {
+            val snapshot = firestore.collection("invitaciones").get()
+            snapshot.documents
+                .map { it.data<InvitacionColaboracion>() }
+                .filter { it.uidEmisor == uidEmisor }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    // 👇 NUEVO: Cancelar una invitación que ya hemos enviado
+    suspend fun cancelarInvitacion(idInvitacion: String): Boolean {
+        return try {
+            firestore.collection("invitaciones").document(idInvitacion).delete()
+            true
+        } catch (e: Exception) { false }
+    }
+
     suspend fun responderInvitacion(invitacion: InvitacionColaboracion, aceptada: Boolean): Boolean {
         return try {
             if (aceptada) {
-                // 1. Buscamos la lista original del creador
                 val docRef = firestore.collection("usuarios")
                     .document(invitacion.uidEmisor)
                     .collection("colecciones")
@@ -262,10 +300,8 @@ object GestorAuth {
 
                     if (!nuevosColaboradores.contains(invitacion.uidDestino)) {
                         nuevosColaboradores.add(invitacion.uidDestino)
-                        // 2. Actualizamos al creador con el nuevo colaborador
                         docRef.update(mapOf("colaboradores" to nuevosColaboradores))
 
-                        // 3. Guardamos una copia en la nube del invitado marcada como esColaboracion = true
                         val copiaParaInvitado = coleccionOriginal.copy(
                             colaboradores = nuevosColaboradores,
                             esColaboracion = true
@@ -274,7 +310,6 @@ object GestorAuth {
                     }
                 }
             }
-            // 4. Borramos la invitación tanto si acepta como si rechaza
             firestore.collection("invitaciones").document(invitacion.id).delete()
             true
         } catch (e: Exception) { false }

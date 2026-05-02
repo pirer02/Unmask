@@ -64,17 +64,25 @@ fun PantallaJuego(
                 is ElementoGuardado.Individual -> listOf(
                     PalabraJuego(
                         palabra = elemento.palabra.capitalizarPrimera(),
-                        pista = elemento.pista.capitalizarPrimera(),
+                        // 👇 CAMBIO: Dividimos el texto por comas, limpiamos espacios y elegimos uno al azar
+                        pista = elemento.pista.split(",")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                            .randomOrNull()?.capitalizarPrimera() ?: "",
                         nombreGrupo = null,
-                        imagenUrl = elemento.imagenUrl // 👇 Extraemos la URL
+                        imagenUrl = elemento.imagenUrl
                     )
                 )
                 is ElementoGuardado.Conjunto -> elemento.palabras.map { p ->
                     PalabraJuego(
                         palabra = p.palabra.capitalizarPrimera(),
-                        pista = p.pista.capitalizarPrimera(),
+                        // 👇 CAMBIO: Hacemos exactamente lo mismo para las palabras en grupo
+                        pista = p.pista.split(",")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                            .randomOrNull()?.capitalizarPrimera() ?: "",
                         nombreGrupo = elemento.nombreConjunto.capitalizarPrimera(),
-                        imagenUrl = p.imagenUrl // 👇 Extraemos la URL
+                        imagenUrl = p.imagenUrl
                     )
                 }
             }

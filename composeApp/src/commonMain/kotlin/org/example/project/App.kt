@@ -1,3 +1,5 @@
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +55,26 @@ fun App(onLoginGoogle: () -> Unit = {}) {
     }
 }
 
+// 👇 NUEVO: Componente que simula la carga de cada pantalla
+@Composable
+fun PantallaConCarga(content: @Composable () -> Unit) {
+    var cargando by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(350) // Tiempo para que la app respire y acomode los componentes
+        cargando = false
+    }
+
+    if (cargando) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFFFF6D00))
+        }
+    } else {
+        content()
+    }
+}
+
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
     var pantallaActual by remember { mutableStateOf(PantallaNavegacion.INICIO) }
@@ -62,20 +84,24 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
     var coleccionParaJugar by remember { mutableStateOf<ColeccionGuardada?>(null) }
     var opcionesConfiguradas by remember { mutableStateOf<OpcionesJuego?>(null) }
 
+    var uidPerfilExplorar by remember { mutableStateOf<String?>(null) }
+
     val jugadoresGlobales = GestorDatos.jugadoresGlobales
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 👇 NUEVO: ESTADOS PARA EL RADAR DE INVITACIONES
     val usuarioAuth by GestorAuth.usuario.collectAsState()
     var invitacionPendiente by remember { mutableStateOf<InvitacionColaboracion?>(null) }
+    var procesandoInvitacion by remember { mutableStateOf(false) }
 
-    // 👇 NUEVO: LANZADOR DEL RADAR
-    LaunchedEffect(usuarioAuth) {
+    // 👇 CAMBIO: Escucha "pantallaActual" para comprobar si hay invitaciones nuevas
+    LaunchedEffect(usuarioAuth, pantallaActual) {
         if (usuarioAuth != null) {
             val pendientes = GestorAuth.obtenerInvitacionesPendientes(usuarioAuth!!.uid)
             if (pendientes.isNotEmpty()) {
                 invitacionPendiente = pendientes.first()
+            } else {
+                invitacionPendiente = null
             }
         }
     }
@@ -113,141 +139,187 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            when (pantallaActual) {
-                PantallaNavegacion.INICIO -> PantallaInicio(
-                    onJugar = { coleccion ->
-                        coleccionParaJugar = coleccion
-                        GestorDatos.palabrasUsadasSesion.clear()
-                        opcionesConfiguradas = null
-                        pantallaActual = PantallaNavegacion.CONFIG_JUEGO
-                    },
-                    onGestionarJugadores = {
-                        pantallaAnteriorJugadores = PantallaNavegacion.INICIO
-                        pantallaActual = PantallaNavegacion.JUGADORES
-                    },
-                    // 👇 ESTO ES LO QUE FALTABA PARA QUE NO DE ERROR
-                    onCrearLista = {
-                        coleccionAEditar = null
-                        pantallaActual = PantallaNavegacion.CREAR
+
+            // 👇 CAMBIO: Transiciones fluidas entre pantallas
+            AnimatedContent(
+                targetState = pantallaActual,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300)))
+                        .togetherWith(fadeOut(animationSpec = tween(300)))
+                },
+                label = "TransicionNavegacion"
+            ) { pantalla ->
+                when (pantalla) {
+                    PantallaNavegacion.INICIO -> PantallaConCarga {
+                        PantallaInicio(
+                            onJugar = { coleccion ->
+                                coleccionParaJugar = coleccion
+                                GestorDatos.palabrasUsadasSesion.clear()
+                                opcionesConfiguradas = null
+                                pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                            },
+                            onGestionarJugadores = {
+                                pantallaAnteriorJugadores = PantallaNavegacion.INICIO
+                                pantallaActual = PantallaNavegacion.JUGADORES
+                            },
+                            onCrearLista = {
+                                coleccionAEditar = null
+                                pantallaActual = PantallaNavegacion.CREAR
+                            },
+                            onIrAPerfil = { pantallaActual = PantallaNavegacion.PERFIL },
+                            onVerPerfilAjeno = { uid ->
+                                uidPerfilExplorar = uid
+                                pantallaActual = PantallaNavegacion.EXPLORAR
+                            }
+                        )
                     }
-                )
-                PantallaNavegacion.BIBLIOTECA -> PantallaBiblioteca(
-                    onEditar = { coleccion ->
-                        coleccionAEditar = coleccion
-                        pantallaActual = PantallaNavegacion.CREAR
-                    },
-                    onJugar = { coleccion ->
-                        coleccionParaJugar = coleccion
-                        GestorDatos.palabrasUsadasSesion.clear()
-                        opcionesConfiguradas = null
-                        pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                    PantallaNavegacion.BIBLIOTECA -> PantallaConCarga {
+                        PantallaBiblioteca(
+                            onEditar = { coleccion ->
+                                coleccionAEditar = coleccion
+                                pantallaActual = PantallaNavegacion.CREAR
+                            },
+                            onJugar = { coleccion ->
+                                coleccionParaJugar = coleccion
+                                GestorDatos.palabrasUsadasSesion.clear()
+                                opcionesConfiguradas = null
+                                pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                            },
+                            onVerPerfilAjeno = { uid ->
+                                uidPerfilExplorar = uid
+                                pantallaActual = PantallaNavegacion.EXPLORAR
+                            }
+                        )
                     }
-                )
-                PantallaNavegacion.CREAR -> PantallaCrear(
-                    coleccionParaEditar = coleccionAEditar,
-                    snackbarHostState = snackbarHostState,
-                    onGuardadoExitoso = {
-                        coleccionAEditar = null
-                        pantallaActual = PantallaNavegacion.BIBLIOTECA
-                    },
-                    onVolver = {
-                        coleccionAEditar = null
-                        pantallaActual = PantallaNavegacion.INICIO
-                    }
-                )
-                PantallaNavegacion.CONFIG_JUEGO -> {
-                    coleccionParaJugar?.let { coleccion ->
-                        PantallaConfiguracion(
-                            coleccion = coleccion,
-                            jugadores = jugadoresGlobales,
-                            opcionesIniciales = opcionesConfiguradas,
+                    PantallaNavegacion.CREAR -> PantallaConCarga {
+                        PantallaCrear(
+                            coleccionParaEditar = coleccionAEditar,
                             snackbarHostState = snackbarHostState,
-                            onIrAJugadores = { pantallaAnteriorJugadores = PantallaNavegacion.CONFIG_JUEGO; pantallaActual = PantallaNavegacion.JUGADORES },
-                            onIniciarJuego = { opciones -> opcionesConfiguradas = opciones; pantallaActual = PantallaNavegacion.JUEGO },
-                            onVolver = { pantallaActual = PantallaNavegacion.INICIO }
+                            onGuardadoExitoso = {
+                                coleccionAEditar = null
+                                pantallaActual = PantallaNavegacion.BIBLIOTECA
+                            },
+                            onVolver = {
+                                coleccionAEditar = null
+                                pantallaActual = PantallaNavegacion.INICIO
+                            }
                         )
                     }
-                }
-                PantallaNavegacion.JUGADORES -> PantallaJugadores(jugadores = jugadoresGlobales, onVolver = { pantallaActual = pantallaAnteriorJugadores })
-                PantallaNavegacion.JUEGO -> {
-                    if (coleccionParaJugar != null && opcionesConfiguradas != null) {
-                        PantallaJuego(
-                            coleccion = coleccionParaJugar!!,
-                            jugadores = jugadoresGlobales.toList(),
-                            opciones = opcionesConfiguradas!!,
-                            onSalir = { pantallaActual = PantallaNavegacion.CONFIG_JUEGO }
+                    PantallaNavegacion.EXPLORAR -> PantallaConCarga {
+                        PantallaExplorar(
+                            uidInicial = uidPerfilExplorar,
+                            onLimpiarUidInicial = { uidPerfilExplorar = null },
+                            onVolver = { pantallaActual = PantallaNavegacion.INICIO },
+                            onIrAPerfilLogin = { pantallaActual = PantallaNavegacion.PERFIL },
+                            onJugarColeccion = { coleccion ->
+                                coleccionParaJugar = coleccion
+                                GestorDatos.palabrasUsadasSesion.clear()
+                                opcionesConfiguradas = null
+                                pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                            },
+                            onEditar = { coleccion ->
+                                coleccionAEditar = coleccion
+                                pantallaActual = PantallaNavegacion.CREAR
+                            }
                         )
                     }
-                }
-                PantallaNavegacion.EXPLORAR -> PantallaExplorar(
-                    onVolver = { pantallaActual = PantallaNavegacion.INICIO },
-                    onIrAPerfilLogin = { pantallaActual = PantallaNavegacion.PERFIL },
-                    onJugarColeccion = { coleccion ->
-                        coleccionParaJugar = coleccion
-                        GestorDatos.palabrasUsadasSesion.clear()
-                        opcionesConfiguradas = null
-                        pantallaActual = PantallaNavegacion.CONFIG_JUEGO
-                    },
-                    onEditar = { coleccion ->
-                        coleccionAEditar = coleccion
-                        pantallaActual = PantallaNavegacion.CREAR
+                    PantallaNavegacion.PERFIL -> PantallaConCarga {
+                        PantallaMiPerfil(
+                            onVolver = { pantallaActual = PantallaNavegacion.INICIO },
+                            onIniciarSesionGoogle = onLoginGoogle,
+                            onEditar = { coleccion ->
+                                coleccionAEditar = coleccion
+                                pantallaActual = PantallaNavegacion.CREAR
+                            },
+                            onJugar = { coleccion ->
+                                coleccionParaJugar = coleccion
+                                GestorDatos.palabrasUsadasSesion.clear()
+                                opcionesConfiguradas = null
+                                pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                            },
+                            onVerPerfilAjeno = { uid ->
+                                uidPerfilExplorar = uid
+                                pantallaActual = PantallaNavegacion.EXPLORAR
+                            }
+                        )
                     }
-                )
-                PantallaNavegacion.PERFIL -> {
-                    PantallaMiPerfil(
-                        onVolver = { pantallaActual = PantallaNavegacion.INICIO },
-                        onIniciarSesionGoogle = onLoginGoogle,
-                        onEditar = { coleccion ->
-                            coleccionAEditar = coleccion
-                            pantallaActual = PantallaNavegacion.CREAR
-                        },
-                        onJugar = { coleccion ->
-                            coleccionParaJugar = coleccion
-                            GestorDatos.palabrasUsadasSesion.clear()
-                            opcionesConfiguradas = null
-                            pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                    // A las pantallas de juego y configuración no les ponemos progreso por agilidad
+                    PantallaNavegacion.CONFIG_JUEGO -> {
+                        coleccionParaJugar?.let { coleccion ->
+                            PantallaConfiguracion(
+                                coleccion = coleccion,
+                                jugadores = jugadoresGlobales,
+                                opcionesIniciales = opcionesConfiguradas,
+                                snackbarHostState = snackbarHostState,
+                                onIrAJugadores = { pantallaAnteriorJugadores = PantallaNavegacion.CONFIG_JUEGO; pantallaActual = PantallaNavegacion.JUGADORES },
+                                onIniciarJuego = { opciones -> opcionesConfiguradas = opciones; pantallaActual = PantallaNavegacion.JUEGO },
+                                onVolver = { pantallaActual = PantallaNavegacion.INICIO }
+                            )
                         }
-                    )
+                    }
+                    PantallaNavegacion.JUGADORES -> PantallaJugadores(jugadores = jugadoresGlobales, onVolver = { pantallaActual = pantallaAnteriorJugadores })
+                    PantallaNavegacion.JUEGO -> {
+                        if (coleccionParaJugar != null && opcionesConfiguradas != null) {
+                            PantallaJuego(
+                                coleccion = coleccionParaJugar!!,
+                                jugadores = jugadoresGlobales.toList(),
+                                opciones = opcionesConfiguradas!!,
+                                onSalir = { pantallaActual = PantallaNavegacion.CONFIG_JUEGO }
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 
-    // 👇 NUEVO: DIÁLOGO PARA RESPONDER A LA INVITACIÓN
     if (invitacionPendiente != null) {
         AlertDialog(
-            onDismissRequest = { }, // Forzamos respuesta
+            onDismissRequest = { },
             icon = { Icon(Icons.Rounded.Handshake, contentDescription = null, tint = Color(0xFF18C1A8)) },
             title = { Text("¡Nueva Colaboración!") },
             text = {
-                Text("El investigador @${invitacionPendiente?.nombreEmisor} quiere que le ayudes a rellenar su lista '${invitacionPendiente?.nombreLista}'.\n\nSi aceptas, podrás editarla y aparecerá en tu biblioteca como propia.")
+                if (procesandoInvitacion) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color(0xFF18C1A8))
+                    }
+                } else {
+                    Text("El investigador @${invitacionPendiente?.nombreEmisor} quiere que le ayudes a rellenar su lista '${invitacionPendiente?.nombreLista}'.\n\nSi aceptas, podrás editarla y aparecerá en tu biblioteca como propia.")
+                }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            val inv = invitacionPendiente!!
-                            val exito = GestorAuth.responderInvitacion(inv, true)
-                            if (exito) {
-                                snackbarHostState.showSnackbar("¡Ahora eres colaborador de ${inv.nombreLista}!")
-                                // Actualizamos la biblioteca para que aparezca la nueva lista
-                                usuarioAuth?.uid?.let { GestorDatos.descargarDatosNube(it) }
+                if (!procesandoInvitacion) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                procesandoInvitacion = true
+                                val inv = invitacionPendiente!!
+                                val exito = GestorAuth.responderInvitacion(inv, true)
+                                if (exito) {
+                                    snackbarHostState.showSnackbar("¡Ahora eres colaborador de ${inv.nombreLista}!")
+                                    usuarioAuth?.uid?.let { GestorDatos.descargarDatosNube(it) }
+                                }
+                                invitacionPendiente = null
+                                procesandoInvitacion = false
                             }
-                            invitacionPendiente = null
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
-                ) { Text("ACEPTAR") }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
+                    ) { Text("ACEPTAR") }
+                }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            GestorAuth.responderInvitacion(invitacionPendiente!!, false)
-                            invitacionPendiente = null
+                if (!procesandoInvitacion) {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                procesandoInvitacion = true
+                                GestorAuth.responderInvitacion(invitacionPendiente!!, false)
+                                invitacionPendiente = null
+                                procesandoInvitacion = false
+                            }
                         }
-                    }
-                ) { Text("RECHAZAR", color = Color.Gray) }
+                    ) { Text("RECHAZAR", color = Color.Gray) }
+                }
             }
         )
     }

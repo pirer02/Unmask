@@ -28,19 +28,36 @@ import io.kamel.image.asyncPainterResource
 import org.example.project.Datos.*
 import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun PantallaInicio(
     onJugar: (ColeccionGuardada) -> Unit,
     onGestionarJugadores: () -> Unit,
-    onCrearLista: () -> Unit
+    onCrearLista: () -> Unit,
+    onIrAPerfil: () -> Unit,
+    onVerPerfilAjeno: (String) -> Unit
 ) {
-    // Filtramos para separar las creaciones propias de las descargas online
-    val misCreaciones = GestorDatos.coleccionesGlobales.filter { !it.esDescargada }
+    val usuarioAuth by GestorAuth.usuario.collectAsState()
+    var urlFotoPerfil by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(usuarioAuth) {
+        if (usuarioAuth != null) {
+            val perfil = GestorAuth.obtenerPerfilSocial(usuarioAuth!!.uid)
+            urlFotoPerfil = perfil?.fotoPerfil
+        } else {
+            urlFotoPerfil = null
+        }
+    }
+
+    val misCreaciones = GestorDatos.coleccionesGlobales.filter { !it.esDescargada && !it.esColaboracion }
     val recientes = misCreaciones.takeLast(3).reversed()
 
-    val misDescargas = GestorDatos.coleccionesGlobales.filter { it.esDescargada }
+    val misDescargas = GestorDatos.coleccionesGlobales.filter { it.esDescargada && !it.esColaboracion }
     val descargasRecientes = misDescargas.takeLast(3).reversed()
+
+    val misColaboraciones = GestorDatos.coleccionesGlobales.filter { it.esColaboracion }
+    val colaboracionesRecientes = misColaboraciones.takeLast(3).reversed()
 
     val predeterminadas = DatosPredeterminados.listasPredeterminadas
 
@@ -53,15 +70,38 @@ fun PantallaInicio(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("¡Juega con Unmask!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+
             IconButton(
-                onClick = { /* Navegación al perfil manejada por App.kt */ },
-                modifier = Modifier.size(48.dp).clip(CircleShape)
+                onClick = onIrAPerfil,
+                modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFFFF4E6))
             ) {
-                Icon(Icons.Rounded.AccountCircle, contentDescription = "Foto de perfil", modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
+                if (!urlFotoPerfil.isNullOrEmpty()) {
+                    if (urlFotoPerfil!!.startsWith("http")) {
+                        KamelImage(
+                            asyncPainterResource(urlFotoPerfil!!),
+                            contentDescription = "Foto de perfil",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        val bitmap = decodificarBase64Imagen(urlFotoPerfil!!)
+                        if (bitmap != null) {
+                            ComposeImage(
+                                bitmap = bitmap,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Rounded.AccountCircle, contentDescription = "Perfil", modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
+                        }
+                    }
+                } else {
+                    Icon(Icons.Rounded.AccountCircle, contentDescription = "Perfil", modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
+                }
             }
         }
 
-        // Botón para gestionar el grupo de jugadores
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onGestionarJugadores() },
             colors = CardDefaults.cardColors(containerColor = Color(0xFF18C1A8)),
@@ -79,7 +119,7 @@ fun PantallaInicio(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 1. CREACIONES RECIENTES
+        // 1. CREACIONES RECIENTES (TUS LISTAS)
         if (recientes.isNotEmpty()) {
             SeccionTitulo(titulo = "Creaciones Recientes", icono = Icons.Rounded.Stars)
             Spacer(modifier = Modifier.height(8.dp))
@@ -89,29 +129,13 @@ fun PantallaInicio(
                         coleccion = coleccion, esPredeterminada = false,
                         onJugarClick = { onJugar(coleccion) }, onInfoClick = { coleccionViendoInfo = coleccion }
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 2. LISTAS DESCARGADAS (Toque azul de Internet)
-        if (descargasRecientes.isNotEmpty()) {
-            SeccionTitulo(titulo = "Listas Descargadas", icono = Icons.Rounded.CloudDownload)
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                items(descargasRecientes) { coleccion ->
-                    TarjetaColeccionInicio(
-                        coleccion = coleccion, esPredeterminada = false,
-                        onJugarClick = { onJugar(coleccion) }, onInfoClick = { coleccionViendoInfo = coleccion }
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // 3. COLECCIONES PREDETERMINADAS
+        // 👇 CAMBIO: 2. COLECCIONES PREDETERMINADAS (Movidas justo debajo de las tuyas)
         SeccionTitulo(titulo = "Colecciones Predeterminadas", icono = Icons.Rounded.Info)
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
@@ -122,13 +146,49 @@ fun PantallaInicio(
                     onJugarClick = { onJugar(coleccionGuardada) },
                     onInfoClick = { coleccionViendoInfo = coleccionGuardada }
                 )
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
             }
         }
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // 4. SUGERENCIA PARA CREAR LISTA (Solo si no tiene listas propias)
+        // 3. COLABORACIONES
+        if (colaboracionesRecientes.isNotEmpty()) {
+            SeccionTitulo(titulo = "Colaboraciones", icono = Icons.Rounded.Handshake)
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                items(colaboracionesRecientes) { coleccion ->
+                    TarjetaColeccionInicio(
+                        coleccion = coleccion, esPredeterminada = false,
+                        onJugarClick = { onJugar(coleccion) },
+                        onInfoClick = { coleccionViendoInfo = coleccion },
+                        onAutorClick = { coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 4. LISTAS DESCARGADAS
+        if (descargasRecientes.isNotEmpty()) {
+            SeccionTitulo(titulo = "Listas Descargadas", icono = Icons.Rounded.CloudDownload)
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                items(descargasRecientes) { coleccion ->
+                    TarjetaColeccionInicio(
+                        coleccion = coleccion, esPredeterminada = false,
+                        onJugarClick = { onJugar(coleccion) },
+                        onInfoClick = { coleccionViendoInfo = coleccion },
+                        onAutorClick = { coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
         if (misCreaciones.isEmpty()) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4E6)),
@@ -180,19 +240,12 @@ fun TarjetaColeccionInicio(
     coleccion: ColeccionGuardada,
     esPredeterminada: Boolean,
     onJugarClick: () -> Unit,
-    onInfoClick: () -> Unit
+    onInfoClick: () -> Unit,
+    onAutorClick: (() -> Unit)? = null
 ) {
-    val totalPalabras = coleccion.elementos.sumOf { elemento ->
-        when (elemento) {
-            is ElementoGuardado.Individual -> 1
-            is ElementoGuardado.Conjunto -> elemento.palabras.size
-        }
-    }
-
-    // 👇 NUEVO: Estado para guardar la foto que descargaremos
+    val totalPalabras = coleccion.elementos.sumOf { if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size }
     var urlFoto by remember { mutableStateOf<String?>(null) }
 
-    // 👇 NUEVO: Efecto que busca la foto del usuario automáticamente si no es predeterminada
     LaunchedEffect(coleccion.idCreador) {
         if (!esPredeterminada && coleccion.idCreador != null) {
             val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador)
@@ -200,7 +253,6 @@ fun TarjetaColeccionInicio(
         }
     }
 
-    // Configuración de colores según el tipo de lista
     val containerColor: Color
     val textColor: Color
     val categoryColor: Color
@@ -217,8 +269,16 @@ fun TarjetaColeccionInicio(
             picBorderColor = Color(0xFF18C1A8)
             border = BorderStroke(1.dp, Color(0xFFB2DFDB))
         }
-        coleccion.esDescargada -> {
-            containerColor = Color(0xFFE3F2FD) // Azul internet claro
+        coleccion.esColaboracion -> { // Naranja para colaboraciones
+            containerColor = Color(0xFFFFF3E0)
+            textColor = Color(0xFFE65100)
+            categoryColor = Color(0xFFFF6D00)
+            infoColor = Color(0xFFF57C00)
+            picBorderColor = Color(0xFFFF6D00)
+            border = BorderStroke(1.dp, Color(0xFFFFE0B2))
+        }
+        coleccion.esDescargada -> { // AZUL
+            containerColor = Color(0xFFE3F2FD)
             textColor = Color(0xFF0D47A1)
             categoryColor = Color(0xFFFF6D00)
             infoColor = Color(0xFF1976D2)
@@ -236,19 +296,23 @@ fun TarjetaColeccionInicio(
     }
 
     Card(
-        modifier = Modifier.width(220.dp).height(280.dp).clip(RoundedCornerShape(16.dp)).clickable { onJugarClick() },
+        modifier = Modifier
+            .width(160.dp)
+            .height(240.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onJugarClick() },
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (esPredeterminada || coleccion.esDescargada) 0.dp else 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (esPredeterminada || coleccion.esDescargada || coleccion.esColaboracion) 0.dp else 4.dp),
         border = border
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(containerColor),
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(containerColor),
                     contentAlignment = Alignment.Center
                 ) {
                     if (esPredeterminada) {
-                        Text("U", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
+                        Text("U", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
                     } else if (!urlFoto.isNullOrEmpty()) {
                         if (urlFoto!!.startsWith("http")) {
                             KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
@@ -257,33 +321,51 @@ fun TarjetaColeccionInicio(
                             if (bitmap != null) {
                                 ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                             } else {
-                                Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
+                                Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
                             }
                         }
                     } else {
-                        Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
+                        Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    val textoAutor = when {
+                        esPredeterminada -> "Unmask Oficial"
+                        coleccion.esDescargada || coleccion.esColaboracion -> "Por @${coleccion.nombreCreador ?: "investigador"}"
+                        else -> "Por Mí"
+                    }
+
                     Text(
-                        text = if (esPredeterminada) "Unmask Oficial" else "Por @${coleccion.nombreCreador ?: "investigador"}",
-                        fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor, maxLines = 1
+                        text = textoAutor,
+                        fontSize = 11.sp,
+                        fontWeight = if (textoAutor == "Por Mí") FontWeight.Bold else FontWeight.Medium,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.let {
+                            if ((coleccion.esDescargada || coleccion.esColaboracion) && onAutorClick != null && !esPredeterminada) {
+                                it.clickable { onAutorClick.invoke() }
+                            } else it
+                        }
                     )
-                    Text("$totalPalabras palabras", fontSize = 10.sp, color = infoColor)
+                    Text("$totalPalabras pal.", fontSize = 10.sp, color = infoColor, maxLines = 1)
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(coleccion.nombre, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = textColor, maxLines = 2, minLines = 2)
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (coleccion.esDescargada && !esPredeterminada) {
-                    Icon(Icons.Rounded.Cloud, null, modifier = Modifier.size(14.dp), tint = infoColor)
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(coleccion.categoria.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = categoryColor)
+            Text(coleccion.nombre, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Surface(
+                color = if (esPredeterminada) Color(0xFFB2DFDB) else if (coleccion.esColaboracion) Color(0xFFFFE0B2) else if (coleccion.esDescargada) Color(0xFFBBDEFB) else Color(0xFF2C2C2C),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = categoryColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -291,16 +373,18 @@ fun TarjetaColeccionInicio(
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onInfoClick) { Icon(Icons.Rounded.Info, contentDescription = "Información", tint = infoColor) }
+                IconButton(onClick = onInfoClick, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Rounded.Info, contentDescription = "Información", tint = infoColor, modifier = Modifier.size(18.dp))
+                }
                 Button(
                     onClick = onJugarClick,
                     colors = ButtonDefaults.buttonColors(containerColor = if (esPredeterminada) Color(0xFF18C1A8) else Color(0xFFFF6D00)),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    modifier = Modifier.height(36.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(28.dp)
                 ) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Jugar", modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("JUGAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Jugar", modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text("JUGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

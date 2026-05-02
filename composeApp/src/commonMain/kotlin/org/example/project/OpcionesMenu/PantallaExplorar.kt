@@ -29,6 +29,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.text.style.TextOverflow
 import org.example.project.Datos.*
 
 enum class VistaExplorar {
@@ -38,6 +42,8 @@ enum class VistaExplorar {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaExplorar(
+    uidInicial: String? = null,
+    onLimpiarUidInicial: () -> Unit = {},
     onVolver: () -> Unit,
     onIrAPerfilLogin: () -> Unit,
     onJugarColeccion: (ColeccionGuardada) -> Unit,
@@ -49,9 +55,8 @@ fun PantallaExplorar(
 
     var vistaActual by remember { mutableStateOf(VistaExplorar.FEED) }
 
-    // 👇 NUEVO: Estados unificados del buscador
     var textoBusqueda by remember { mutableStateOf("") }
-    var tipoBusqueda by remember { mutableStateOf("Listas") } // "Listas" o "Usuarios"
+    var tipoBusqueda by remember { mutableStateOf("Listas") }
 
     var resultadosBusqueda by remember { mutableStateOf<List<PerfilSocial>>(emptyList()) }
     var buscandoUsuarios by remember { mutableStateOf(false) }
@@ -78,7 +83,6 @@ fun PantallaExplorar(
         }
     }
 
-    // 👇 NUEVO: Solo busca usuarios en la BD si la pestaña activa es "Usuarios"
     LaunchedEffect(textoBusqueda, tipoBusqueda) {
         if (tipoBusqueda == "Usuarios" && textoBusqueda.length >= 2) {
             buscandoUsuarios = true
@@ -107,6 +111,13 @@ fun PantallaExplorar(
         }
     }
 
+    LaunchedEffect(uidInicial) {
+        if (uidInicial != null) {
+            abrirPerfil(uidInicial)
+            onLimpiarUidInicial()
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color(0xFFF9F9F9)
@@ -119,7 +130,6 @@ fun PantallaExplorar(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- ENCABEZADO GLOBAL ---
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 IconButton(onClick = {
                     if (vistaActual == VistaExplorar.PERFIL_USUARIO) {
@@ -139,7 +149,6 @@ fun PantallaExplorar(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- CONTENIDO DINÁMICO ---
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (usuario == null) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -168,7 +177,6 @@ fun PantallaExplorar(
                         VistaExplorar.FEED -> {
                             Column(modifier = Modifier.fillMaxSize()) {
 
-                                // 👇 1. Pestañas para elegir qué buscar (AHORA ESTÁN ARRIBA)
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                     FilterChip(
                                         selected = tipoBusqueda == "Listas",
@@ -194,11 +202,9 @@ fun PantallaExplorar(
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // 👇 2. BÚSQUEDA UNIFICADA (AHORA ESTÁ DEBAJO)
                                 OutlinedTextField(
                                     value = textoBusqueda,
                                     onValueChange = { textoBusqueda = it },
-                                    // El texto cambiará solo según la pestaña activa
                                     placeholder = { Text(if (tipoBusqueda == "Listas") "Buscar listas..." else "Buscar investigadores...") },
                                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
                                     trailingIcon = {
@@ -216,7 +222,6 @@ fun PantallaExplorar(
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // 👇 3. Lógica de visualización (A PARTIR DE AQUÍ TODO SIGUE IGUAL)
                                 if (tipoBusqueda == "Usuarios") {
                                     if (textoBusqueda.isEmpty()) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -232,6 +237,7 @@ fun PantallaExplorar(
                                                 Text("No se encontraron investigadores", color = Color.Gray)
                                             }
                                         } else {
+                                            // Los usuarios se mantienen en una lista vertical normal de 1 fila
                                             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                                                 items(resultadosBusqueda) { perfil ->
                                                     TarjetaUsuarioBuscado(
@@ -244,7 +250,6 @@ fun PantallaExplorar(
                                         }
                                     }
                                 } else {
-                                    // PESTAÑA: LISTAS
                                     if (textoBusqueda.isEmpty()) {
                                         LazyRow(
                                             contentPadding = PaddingValues(0.dp),
@@ -292,7 +297,6 @@ fun PantallaExplorar(
                                             Text("No hay listas públicas en la comunidad aún.", color = Color.Gray)
                                         }
                                     } else {
-                                        // Filtramos si hay texto, si no, ordenamos según el chip normal
                                         val feedMostrado = if (textoBusqueda.isNotEmpty()) {
                                             feedGlobal.filter {
                                                 it.nombre.contains(textoBusqueda, ignoreCase = true) ||
@@ -312,10 +316,13 @@ fun PantallaExplorar(
                                                 Text("No hay listas que coincidan con tu búsqueda.", color = Color.Gray)
                                             }
                                         } else {
-                                            LazyColumn(
+                                            // 👇 NUEVO: Grid de 2 columnas para el feed de comunidad
+                                            LazyVerticalGrid(
+                                                columns = GridCells.Fixed(2),
                                                 modifier = Modifier.fillMaxSize(),
                                                 contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
-                                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                                             ) {
                                                 items(feedMostrado) { coleccion ->
                                                     TarjetaComunidad(
@@ -408,6 +415,7 @@ fun PantallaExplorar(
 
                                             Spacer(modifier = Modifier.height(24.dp))
 
+                                            // 👇 ÚNICA FILA CON SEGUIDORES Y BOTÓN SEGUIR (Sin duplicados)
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -451,23 +459,43 @@ fun PantallaExplorar(
                                                     Text(if (loSigo) "Siguiendo" else "Seguir", fontWeight = FontWeight.Bold)
                                                 }
                                             }
+
+                                            // 👇 AQUÍ EMPIEZA DIRECTAMENTE LA DESCRIPCIÓN
+                                            if (!perfilSeleccionado!!.descripcion.isNullOrBlank()) {
+                                                Spacer(modifier = Modifier.height(20.dp))
+                                                Surface(
+                                                    color = Color(0xFFF0F5F5),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text(
+                                                        text = perfilSeleccionado!!.descripcion!!,
+                                                        modifier = Modifier.padding(16.dp),
+                                                        fontSize = 14.sp,
+                                                        color = Color(0xFF424242),
+                                                        textAlign = TextAlign.Center,
+                                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
 
                                     Spacer(modifier = Modifier.height(16.dp))
 
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentPadding = PaddingValues(bottom = 16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        if (listasPerfilAjeno.isEmpty()) {
-                                            item {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
-                                                    Text("Este usuario no tiene listas públicas.", color = Color.Gray)
-                                                }
-                                            }
-                                        } else {
+                                    if (listasPerfilAjeno.isEmpty()) {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+                                            Text("Este usuario no tiene listas públicas.", color = Color.Gray)
+                                        }
+                                    } else {
+                                        // Grid de 2 columnas para el perfil ajeno
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Fixed(2),
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentPadding = PaddingValues(bottom = 16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
                                             items(listasPerfilAjeno) { coleccion ->
                                                 TarjetaComunidad(
                                                     coleccion = coleccion,
@@ -668,79 +696,135 @@ fun TarjetaComunidad(
     var likeDado by remember { mutableStateOf(miUid != null && coleccion.usuariosLikes.contains(miUid)) }
     var likesActuales by remember { mutableStateOf(coleccion.likes) }
 
+    // 👇 NUEVO: Comprobamos si el usuario ya es un colaborador activo de esta lista
+    val esColaborador = miUid != null && coleccion.colaboradores.contains(miUid)
     val estaDescargada = GestorDatos.coleccionesGlobales.any { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
 
+    var urlFoto by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(coleccion.idCreador) {
+        if (coleccion.idCreador != null) {
+            val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador)
+            urlFoto = perfil?.fotoPerfil
+        }
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(240.dp)
+            .clip(RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(2.dp),
-        shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, Color(0xFFE0F2F1))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(color = Color(0xFFE0F2F1), shape = RoundedCornerShape(8.dp)) {
-                    Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B))
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFE0F2F1)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!urlFoto.isNullOrEmpty()) {
+                        if (urlFoto!!.startsWith("http")) {
+                            KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        } else {
+                            val bitmap = decodificarBase64Imagen(urlFoto!!)
+                            if (bitmap != null) {
+                                ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            } else {
+                                Text(autor.take(1).uppercase(), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B))
+                            }
+                        }
+                    } else {
+                        Text(autor.take(1).uppercase(), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B))
+                    }
                 }
-                Spacer(modifier = Modifier.weight(1f))
 
-                IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Rounded.Info, null, tint = Color.Gray)
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Por @$autor",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFF6D00),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.let {
+                            if (onAutorClick != null) it.clickable { onAutorClick() } else it
+                        }
+                    )
+                    Text("$totalPalabras pal.", fontSize = 10.sp, color = Color.Gray, maxLines = 1)
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(
+                        onClick = {
+                            likeDado = !likeDado
+                            likesActuales += if (likeDado) 1 else -1
+                            onLike(likeDado)
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (likeDado) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = "Like",
+                            tint = Color(0xFFFF3D00),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text("$likesActuales", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Color.Gray)
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Text(coleccion.nombre, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
 
-            Text(
-                text = "Por @$autor",
-                fontSize = 12.sp,
-                color = Color(0xFFFF6D00),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.let {
-                    if (onAutorClick != null) it.clickable { onAutorClick() }.padding(vertical = 4.dp) else it
+            Text(coleccion.nombre, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1A1A1A), maxLines = 2, overflow = TextOverflow.Ellipsis)
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Surface(color = Color(0xFFE0F2F1), shape = RoundedCornerShape(8.dp)) {
+                Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+            HorizontalDivider(color = Color(0xFFE0F2F1), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onInfo, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Rounded.Info, contentDescription = "Información", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(4.dp))
+
+                    // 👇 NUEVO: Si eres colaborador, no puedes descargarla de nuevo
+                    if (esColaborador) {
+                        Icon(Icons.Rounded.Group, contentDescription = "Colaborador", tint = Color(0xFFFF6D00), modifier = Modifier.size(18.dp).padding(4.dp))
+                    } else {
+                        IconButton(onClick = onDescargar, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                imageVector = if (estaDescargada) Icons.Rounded.CloudDone else Icons.Rounded.CloudDownload,
+                                contentDescription = if (estaDescargada) "Eliminar descarga" else "Descargar",
+                                tint = if (estaDescargada) Color(0xFF00897B) else Color(0xFF18C1A8),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = {
-                        likeDado = !likeDado
-                        likesActuales += if (likeDado) 1 else -1
-                        onLike(likeDado)
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = if (likeDado) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Like",
-                        tint = Color(0xFFFF3D00)
-                    )
-                }
-                Spacer(Modifier.width(4.dp))
-                Text("$likesActuales", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                IconButton(onClick = onDescargar, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = if (estaDescargada) Icons.Rounded.CloudDone else Icons.Rounded.CloudDownload,
-                        contentDescription = if (estaDescargada) "Eliminar descarga" else "Descargar",
-                        tint = if (estaDescargada) Color(0xFF00897B) else Color(0xFF18C1A8)
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
                 Button(
                     onClick = onJugar,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    modifier = Modifier.height(36.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(28.dp)
                 ) {
-                    Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("JUGAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Jugar", modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text("JUGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
