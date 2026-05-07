@@ -9,6 +9,30 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.example.project.Datos.GestorAuth
 
+// 👇 NUEVO: Movido aquí desde App.kt para poder guardarlo
+@Serializable
+data class OpcionesJuego(
+    val numImpostores: Int,
+    val pistaParaImpostor: Boolean,
+    val limiteRondas: Boolean,
+    val rondas: Int,
+    val limiteTiempo: Boolean,
+    val tiempoMinutos: Int,
+    val sinRepeticiones: Boolean = false
+)
+
+// 👇 NUEVO: Modelo del Checkpoint
+@Serializable
+data class CheckpointJuego(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val nombre: String,
+    val fecha: Long,
+    val nombreColeccion: String,
+    val idCreadorColeccion: String?,
+    val opciones: OpcionesJuego,
+    val palabrasUsadas: List<String>
+)
+
 // 1. MODELOS DE DATOS
 @Serializable
 data class ColeccionGuardada(
@@ -18,10 +42,10 @@ data class ColeccionGuardada(
     val idCreador: String? = null,
     val nombreCreador: String? = null,
     val likes: Int = 0,
-    val usuariosLikes: List<String> = emptyList(), // 👇 NUEVO: Registra quién dio Like
+    val usuariosLikes: List<String> = emptyList(), // Registra quién dio Like
     val esPublica: Boolean = false,
     val esDescargada: Boolean = false,
-    // 👇 NUEVOS CAMPOS PARA COLABORACIÓN
+    // CAMPOS PARA COLABORACIÓN
     val colaboradores: List<String> = emptyList(), // UIDs de los usuarios invitados
     val esColaboracion: Boolean = false // True si esta lista es de un amigo que te invitó
 )
@@ -35,17 +59,21 @@ sealed class ElementoGuardado {
 }
 
 // 2. EL GESTOR DE DATOS
-// 2. EL GESTOR DE DATOS
 object GestorDatos {
     private val settings = Settings()
     private const val KEY_COLECCIONES = "mis_colecciones_v1"
     private const val KEY_JUGADORES = "mis_jugadores_v1"
+    private const val KEY_CHECKPOINTS = "mis_checkpoints_v1" // 👇 NUEVO
 
-    // 👇 Evita que la app se rompa al leer datos antiguos a los que les faltan campos
+    // Evita que la app se rompa al leer datos antiguos a los que les faltan campos
     private val jsonConfig = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     val coleccionesGlobales = mutableStateListOf<ColeccionGuardada>()
     val jugadoresGlobales = mutableStateListOf<String>()
+
+    // 👇 NUEVO: Listado de checkpoints y el ID del activo
+    val checkpointsGlobales = mutableStateListOf<CheckpointJuego>()
+    var checkpointActivoId: String? = null
 
     val palabrasUsadasSesion = mutableStateListOf<String>()
 
@@ -67,6 +95,16 @@ object GestorDatos {
                 jugadoresGlobales.addAll(datosJugadores)
             } catch (e: Exception) { println("Error cargar jugadores: ${e.message}") }
         }
+
+        // 👇 NUEVO: Cargar los checkpoints guardados
+        val jsonCheckpoints = settings.getString(KEY_CHECKPOINTS, "")
+        if (jsonCheckpoints.isNotEmpty()) {
+            try {
+                val datosCheckpoints = jsonConfig.decodeFromString<List<CheckpointJuego>>(jsonCheckpoints)
+                checkpointsGlobales.clear()
+                checkpointsGlobales.addAll(datosCheckpoints)
+            } catch (e: Exception) { println("Error cargar checkpoints: ${e.message}") }
+        }
     }
 
     fun guardarCambiosMemoria() {
@@ -75,6 +113,10 @@ object GestorDatos {
 
         val jsonJugadores = jsonConfig.encodeToString(jugadoresGlobales.toList())
         settings.putString(KEY_JUGADORES, jsonJugadores)
+
+        // 👇 NUEVO: Guardar los checkpoints actualizados
+        val jsonCheckpoints = jsonConfig.encodeToString(checkpointsGlobales.toList())
+        settings.putString(KEY_CHECKPOINTS, jsonCheckpoints)
     }
 
     fun guardarNuevaColeccion(coleccion: ColeccionGuardada) {
@@ -237,9 +279,7 @@ object GestorDatos {
         }
     }
 
-    // 👇 NUEVO: Función para expulsar a un colaborador de forma segura
     suspend fun eliminarColaborador(miUid: String, coleccion: ColeccionGuardada, colabUid: String) {
-        // 1. Borramos la copia colaborativa de la nube del usuario expulsado
         try {
             GestorAuth.firestore
                 .collection("usuarios")
@@ -249,32 +289,25 @@ object GestorDatos {
                 .delete()
         } catch (e: Exception) { println("Error eliminando lista del colaborador: ${e.message}") }
 
-        // 2. Actualizamos la lista excluyendo al colaborador
         val nuevosColaboradores = coleccion.colaboradores.filter { it != colabUid }
         val listaActualizada = coleccion.copy(colaboradores = nuevosColaboradores)
 
-        // 3. Actualizamos en memoria local
         val index = coleccionesGlobales.indexOfFirst { it.nombre == coleccion.nombre && it.idCreador == miUid }
         if (index != -1) {
             coleccionesGlobales[index] = listaActualizada
             guardarCambiosMemoria()
         }
 
-        // 4. Subimos los cambios a la nube del creador (y por cascada a los demás si hubiera)
         subirColeccionNube(miUid, listaActualizada)
     }
 
-
-    // 👇 NUEVO: Función para que un colaborador abandone una lista
     suspend fun abandonarColaboracion(miUid: String, coleccion: ColeccionGuardada) {
-        // 1. Borramos la copia colaborativa local y de la memoria
         val index = coleccionesGlobales.indexOfFirst { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
         if (index != -1) {
             coleccionesGlobales.removeAt(index)
             guardarCambiosMemoria()
         }
 
-        // 2. Borramos nuestra copia en nuestra base de datos (nube)
         try {
             GestorAuth.firestore
                 .collection("usuarios")
@@ -284,7 +317,6 @@ object GestorDatos {
                 .delete()
         } catch (e: Exception) { println("Error borrando copia local: ${e.message}") }
 
-        // 3. Nos quitamos de la lista de colaboradores en el documento del creador original
         coleccion.idCreador?.let { creadorUid ->
             try {
                 val docRef = GestorAuth.firestore

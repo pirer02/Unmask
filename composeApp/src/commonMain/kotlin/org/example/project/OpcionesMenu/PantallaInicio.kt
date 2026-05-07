@@ -30,9 +30,15 @@ import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
 import androidx.compose.ui.text.style.TextOverflow
 
+// 👇 NUEVOS IMPORTS PARA LA FECHA
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 @Composable
 fun PantallaInicio(
     onJugar: (ColeccionGuardada) -> Unit,
+    onJugarCheckpoint: (ColeccionGuardada, CheckpointJuego) -> Unit = { _, _ -> }, // 👇 NUEVO
     onGestionarJugadores: () -> Unit,
     onCrearLista: () -> Unit,
     onIrAPerfil: () -> Unit,
@@ -40,6 +46,9 @@ fun PantallaInicio(
 ) {
     val usuarioAuth by GestorAuth.usuario.collectAsState()
     var urlFotoPerfil by remember { mutableStateOf<String?>(null) }
+
+    // 👇 NUEVO: Estado para el diálogo de borrar checkpoint
+    var checkpointParaBorrar by remember { mutableStateOf<CheckpointJuego?>(null) }
 
     LaunchedEffect(usuarioAuth) {
         if (usuarioAuth != null) {
@@ -49,6 +58,9 @@ fun PantallaInicio(
             urlFotoPerfil = null
         }
     }
+
+    // 👇 NUEVO: Obtenemos los checkpoints guardados ordenados por fecha
+    val misCheckpoints = GestorDatos.checkpointsGlobales.sortedByDescending { it.fecha }
 
     val misCreaciones = GestorDatos.coleccionesGlobales.filter { !it.esDescargada && !it.esColaboracion }
     val recientes = misCreaciones.takeLast(3).reversed()
@@ -119,6 +131,31 @@ fun PantallaInicio(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // 👇 NUEVO: 0. CHECKPOINTS (Partidas en pausa)
+        if (misCheckpoints.isNotEmpty()) {
+            SeccionTitulo(titulo = "Partidas en Pausa", icono = Icons.Rounded.SaveAs)
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                items(misCheckpoints) { checkpoint ->
+                    val coleccionAsociada = GestorDatos.coleccionesGlobales.find { it.nombre == checkpoint.nombreColeccion && it.idCreador == checkpoint.idCreadorColeccion }
+                    if (coleccionAsociada != null) {
+                        TarjetaCheckpoint(
+                            checkpoint = checkpoint,
+                            coleccion = coleccionAsociada,
+                            onJugarClick = { onJugarCheckpoint(coleccionAsociada, checkpoint) },
+                            onBorrarClick = { checkpointParaBorrar = checkpoint }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    } else {
+                        // Si la colección ya no existe, auto-limpiamos el checkpoint
+                        GestorDatos.checkpointsGlobales.remove(checkpoint)
+                        GestorDatos.guardarCambiosMemoria()
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
         // 1. CREACIONES RECIENTES (TUS LISTAS)
         if (recientes.isNotEmpty()) {
             SeccionTitulo(titulo = "Creaciones Recientes", icono = Icons.Rounded.Stars)
@@ -135,7 +172,7 @@ fun PantallaInicio(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 👇 CAMBIO: 2. COLECCIONES PREDETERMINADAS (Movidas justo debajo de las tuyas)
+        // 2. COLECCIONES PREDETERMINADAS
         SeccionTitulo(titulo = "Colecciones Predeterminadas", icono = Icons.Rounded.Info)
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
@@ -223,6 +260,25 @@ fun PantallaInicio(
 
     if (coleccionViendoInfo != null) {
         DialogoInfoColeccion(coleccion = coleccionViendoInfo!!, onCerrar = { coleccionViendoInfo = null })
+    }
+
+    // 👇 NUEVO: DIÁLOGO DE BORRAR CHECKPOINT
+    if (checkpointParaBorrar != null) {
+        AlertDialog(
+            onDismissRequest = { checkpointParaBorrar = null },
+            title = { Text("¿Finalizar y borrar Checkpoint?") },
+            text = { Text("Si borras '${checkpointParaBorrar!!.nombre}', no podrás retomar esta partida donde la dejaste. ¿Estás seguro?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    GestorDatos.checkpointsGlobales.removeAll { it.id == checkpointParaBorrar!!.id }
+                    GestorDatos.guardarCambiosMemoria()
+                    checkpointParaBorrar = null
+                }) { Text("BORRAR", color = Color.Red, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { checkpointParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) }
+            }
+        )
     }
 }
 
@@ -427,6 +483,117 @@ fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// 👇 NUEVO: COMPONENTE VISUAL DE LA TARJETA DE CHECKPOINT
+@Composable
+fun TarjetaCheckpoint(
+    checkpoint: CheckpointJuego,
+    coleccion: ColeccionGuardada,
+    onJugarClick: () -> Unit,
+    onBorrarClick: () -> Unit
+) {
+    val formatter = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
+    val fechaTexto = formatter.format(Date(checkpoint.fecha))
+
+    // 👇 NUEVO: Cargamos la foto del creador igual que en las otras tarjetas
+    var urlFoto by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(coleccion.idCreador) {
+        if (coleccion.idCreador != null) {
+            val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador)
+            urlFoto = perfil?.fotoPerfil
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .width(160.dp) // Igualamos el ancho a las demás tarjetas
+            .height(240.dp) // Igualamos el alto para que no se corte nada
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onJugarClick() },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF4A148C)), // Color especial (morado)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
+
+            // Título y botón borrar
+            Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = checkpoint.nombre,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onBorrarClick, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Borrar", tint = Color(0xFFFF8A80))
+                }
+            }
+
+            Text(fechaTexto, color = Color.LightGray, fontSize = 10.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 👇 NUEVO: Bloque del Autor (Foto y Nombre)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(Color(0xFF4A148C)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!urlFoto.isNullOrEmpty()) {
+                        if (urlFoto!!.startsWith("http")) {
+                            KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        } else {
+                            val bitmap = decodificarBase64Imagen(urlFoto!!)
+                            if (bitmap != null) {
+                                ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            } else {
+                                Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    } else {
+                        Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    val textoAutor = coleccion.nombreCreador?.let { "Por @$it" } ?: "Por Anónimo"
+                    Text(
+                        text = textoAutor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Info de progreso
+            Text("Lista: ${coleccion.nombre}", color = Color(0xFFCE93D8), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("${checkpoint.palabrasUsadas.size} pal. usadas", color = Color(0xFFCE93D8), fontSize = 11.sp)
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Botón jugar
+            Button(
+                onClick = onJugarClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)),
+                modifier = Modifier.fillMaxWidth().height(32.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("CONTINUAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

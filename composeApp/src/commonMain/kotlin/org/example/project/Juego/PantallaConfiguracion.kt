@@ -1,6 +1,8 @@
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,7 +25,7 @@ import org.example.project.Datos.*
 fun PantallaConfiguracion(
     coleccion: ColeccionGuardada,
     jugadores: List<String>,
-    opcionesIniciales: OpcionesJuego?, // 👇 Recibe la configuración anterior si existe
+    opcionesIniciales: OpcionesJuego?, // Recibe la configuración anterior si existe
     snackbarHostState: SnackbarHostState,
     onIrAJugadores: () -> Unit,
     onIniciarJuego: (OpcionesJuego) -> Unit,
@@ -31,25 +33,27 @@ fun PantallaConfiguracion(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // 👇 Inicializamos con la configuración pasada por parámetro (para mantenerla intacta al volver)
+    // Inicializamos con la configuración pasada por parámetro
     var numImpostores by remember { mutableStateOf(opcionesIniciales?.numImpostores ?: 1) }
     var pistaParaImpostor by remember { mutableStateOf(opcionesIniciales?.pistaParaImpostor ?: false) }
-
     var limiteRondas by remember { mutableStateOf(opcionesIniciales?.limiteRondas ?: false) }
     var rondas by remember { mutableStateOf(opcionesIniciales?.rondas ?: 5) }
-
     var limiteTiempo by remember { mutableStateOf(opcionesIniciales?.limiteTiempo ?: false) }
     var tiempoMinutos by remember { mutableStateOf(opcionesIniciales?.tiempoMinutos ?: 10) }
-
-    // 👇 El estado del nuevo botón
     var sinRepeticiones by remember { mutableStateOf(opcionesIniciales?.sinRepeticiones ?: false) }
+
+    // 👇 NUEVOS ESTADOS PARA GESTIÓN DE CHECKPOINTS
+    var mostrarDialogoIncompatible by remember { mutableStateOf(false) }
+    var mostrarDialogoGuardarCheckpoint by remember { mutableStateOf(false) }
+    var mostrarDialogoCargarCheckpoint by remember { mutableStateOf(false) }
+    var nombreNuevoCheckpoint by remember { mutableStateOf("") }
 
     val maxImpostores = max(1, jugadores.size / 3)
     LaunchedEffect(jugadores.size) {
-        if (numImpostores > maxImpostores) numImpostores = maxImpostores // Evitamos bugs sin borrar tu configuración
+        if (numImpostores > maxImpostores) numImpostores = maxImpostores
     }
 
-    // 👇 CÁLCULOS DEL CONTADOR DE PALABRAS
+    // CÁLCULOS DEL CONTADOR DE PALABRAS
     val totalPalabras = remember(coleccion) {
         coleccion.elementos.sumOf {
             if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size
@@ -101,7 +105,7 @@ fun PantallaConfiguracion(
                 }
             }
 
-            // 👇 NUEVA TARJETA: NO REPETIR PALABRAS
+            // 👇 TARJETA NO REPETIR PALABRAS (CON NUEVAS FUNCIONES)
             TarjetaConfig {
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -111,24 +115,58 @@ fun PantallaConfiguracion(
                         }
                         Switch(
                             checked = sinRepeticiones,
-                            onCheckedChange = {
-                                sinRepeticiones = it
-                                // Se vacía el contador si la enciendes o apagas, contando como desde el principio
-                                GestorDatos.palabrasUsadasSesion.clear()
+                            onCheckedChange = { activado ->
+                                if (!activado && GestorDatos.checkpointActivoId != null) {
+                                    // Si intenta desactivar con un checkpoint cargado, avisamos
+                                    mostrarDialogoIncompatible = true
+                                } else {
+                                    sinRepeticiones = activado
+                                    // Si lo activa de cero (sin checkpoint), limpiamos la sesión
+                                    if (activado && GestorDatos.checkpointActivoId == null) {
+                                        GestorDatos.palabrasUsadasSesion.clear()
+                                    }
+                                }
                             },
                             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF18C1A8))
                         )
                     }
-                    // Si está activo, mostramos el contador
+
                     if (sinRepeticiones) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Palabras restantes:", color = Color.White, fontSize = 14.sp)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "$palabrasRestantes / $totalPalabras",
+                                "Restantes: $palabrasRestantes / $totalPalabras",
                                 color = if (palabrasRestantes <= 0) Color.Red else Color(0xFFFF6D00),
                                 fontWeight = FontWeight.Bold
                             )
+
+                            // 👇 BOTONES PARA GESTIONAR CHECKPOINT
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { mostrarDialogoCargarCheckpoint = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Cargar", fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = { mostrarDialogoGuardarCheckpoint = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Guardar", fontSize = 12.sp)
+                                }
+                            }
+                        }
+
+                        if (GestorDatos.checkpointActivoId != null) {
+                            val cp = GestorDatos.checkpointsGlobales.find { it.id == GestorDatos.checkpointActivoId }
+                            if (cp != null) {
+                                Text("Checkpoint activo: ${cp.nombre}", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                            }
                         }
                     }
                 }
@@ -173,8 +211,7 @@ fun PantallaConfiguracion(
                     if (jugadores.size < 3) {
                         coroutineScope.launch { snackbarHostState.showSnackbar("Faltan jugadores. Necesitas mínimo 3.") }
                     } else if (sinRepeticiones && palabrasRestantes <= 0) {
-                        // 👇 Bloqueamos si el contador llega a cero
-                        coroutineScope.launch { snackbarHostState.showSnackbar("No quedan palabras nuevas. Apaga y enciende la opción para reiniciar.") }
+                        coroutineScope.launch { snackbarHostState.showSnackbar("No quedan palabras nuevas. Apaga y enciende la opción o carga otro checkpoint.") }
                     } else {
                         val opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
                         onIniciarJuego(opciones)
@@ -191,6 +228,152 @@ fun PantallaConfiguracion(
 
             Spacer(modifier = Modifier.height(64.dp))
         }
+    }
+
+    // 👇 DIÁLOGOS DE GESTIÓN DE CHECKPOINTS 👇
+
+    if (mostrarDialogoIncompatible) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoIncompatible = false },
+            title = { Text("Checkpoint Incompatible") },
+            text = { Text("No puedes desactivar esta opción mientras usas un checkpoint. ¿Quieres guardar el progreso actual primero?") },
+            confirmButton = {
+                Button(onClick = {
+                    mostrarDialogoIncompatible = false
+                    mostrarDialogoGuardarCheckpoint = true
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) {
+                    Text("GUARDAR PROGRESO")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    sinRepeticiones = false
+                    GestorDatos.checkpointActivoId = null
+                    GestorDatos.palabrasUsadasSesion.clear()
+                    mostrarDialogoIncompatible = false
+                }) {
+                    Text("DESCARTAR Y DESACTIVAR", color = Color.Red)
+                }
+            }
+        )
+    }
+
+    if (mostrarDialogoGuardarCheckpoint) {
+        val cpsDeEstaLista = GestorDatos.checkpointsGlobales.filter { it.nombreColeccion == coleccion.nombre && it.idCreadorColeccion == coleccion.idCreador }
+
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoGuardarCheckpoint = false },
+            title = { Text("Guardar Checkpoint") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = nombreNuevoCheckpoint,
+                        onValueChange = { nombreNuevoCheckpoint = it },
+                        label = { Text("Nombre para este Checkpoint") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    if (cpsDeEstaLista.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("O actualiza uno existente:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
+                            items(cpsDeEstaLista) { cp ->
+                                Text(
+                                    text = "Actualizar: ${cp.nombre}",
+                                    color = Color(0xFFFF6D00),
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        val actualizado = cp.copy(
+                                            fecha = System.currentTimeMillis(),
+                                            palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
+                                            opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
+                                        )
+                                        val index = GestorDatos.checkpointsGlobales.indexOf(cp)
+                                        GestorDatos.checkpointsGlobales[index] = actualizado
+                                        GestorDatos.checkpointActivoId = actualizado.id
+                                        GestorDatos.guardarCambiosMemoria()
+                                        mostrarDialogoGuardarCheckpoint = false
+                                        coroutineScope.launch { snackbarHostState.showSnackbar("Checkpoint actualizado") }
+                                    }.padding(vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (nombreNuevoCheckpoint.isNotBlank()) {
+                            val nuevoCp = CheckpointJuego(
+                                nombre = nombreNuevoCheckpoint.trim(),
+                                fecha = System.currentTimeMillis(),
+                                nombreColeccion = coleccion.nombre,
+                                idCreadorColeccion = coleccion.idCreador,
+                                palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
+                                opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
+                            )
+                            GestorDatos.checkpointsGlobales.add(nuevoCp)
+                            GestorDatos.checkpointActivoId = nuevoCp.id
+                            GestorDatos.guardarCambiosMemoria()
+                            mostrarDialogoGuardarCheckpoint = false
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Nuevo checkpoint creado") }
+                        }
+                    },
+                    enabled = nombreNuevoCheckpoint.isNotBlank()
+                ) {
+                    Text("CREAR NUEVO")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoGuardarCheckpoint = false }) { Text("CANCELAR", color = Color.Gray) }
+            }
+        )
+    }
+
+    if (mostrarDialogoCargarCheckpoint) {
+        val cpsDeEstaLista = GestorDatos.checkpointsGlobales.filter { it.nombreColeccion == coleccion.nombre && it.idCreadorColeccion == coleccion.idCreador }
+
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoCargarCheckpoint = false },
+            title = { Text("Cargar Checkpoint") },
+            text = {
+                if (cpsDeEstaLista.isEmpty()) {
+                    Text("No tienes checkpoints guardados para esta lista.")
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(cpsDeEstaLista) { cp ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                                    // Cargamos todos los datos del checkpoint
+                                    GestorDatos.palabrasUsadasSesion.clear()
+                                    GestorDatos.palabrasUsadasSesion.addAll(cp.palabrasUsadas)
+                                    GestorDatos.checkpointActivoId = cp.id
+
+                                    numImpostores = cp.opciones.numImpostores
+                                    pistaParaImpostor = cp.opciones.pistaParaImpostor
+                                    limiteRondas = cp.opciones.limiteRondas
+                                    rondas = cp.opciones.rondas
+                                    limiteTiempo = cp.opciones.limiteTiempo
+                                    tiempoMinutos = cp.opciones.tiempoMinutos
+                                    sinRepeticiones = cp.opciones.sinRepeticiones
+
+                                    mostrarDialogoCargarCheckpoint = false
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Progreso de ${cp.nombre} cargado") }
+                                },
+                                color = Color(0xFFE8F0FE),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(cp.nombre, modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarDialogoCargarCheckpoint = false }) { Text("CERRAR") }
+            }
+        )
     }
 }
 

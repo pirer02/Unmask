@@ -24,15 +24,7 @@ enum class PantallaNavegacion {
     INICIO, BIBLIOTECA, CREAR, EXPLORAR, PERFIL, CONFIG_JUEGO, JUGADORES, JUEGO
 }
 
-data class OpcionesJuego(
-    val numImpostores: Int,
-    val pistaParaImpostor: Boolean,
-    val limiteRondas: Boolean,
-    val rondas: Int,
-    val limiteTiempo: Boolean,
-    val tiempoMinutos: Int,
-    val sinRepeticiones: Boolean = false
-)
+// 👇 ELIMINADO: OpcionesJuego ahora está en GestorDatos.kt
 
 @Composable
 fun App(onLoginGoogle: () -> Unit = {}) {
@@ -55,7 +47,7 @@ fun App(onLoginGoogle: () -> Unit = {}) {
     }
 }
 
-// 👇 NUEVO: Componente que simula la carga de cada pantalla
+// Componente que simula la carga de cada pantalla
 @Composable
 fun PantallaConCarga(content: @Composable () -> Unit) {
     var cargando by remember { mutableStateOf(true) }
@@ -94,7 +86,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
     var invitacionPendiente by remember { mutableStateOf<InvitacionColaboracion?>(null) }
     var procesandoInvitacion by remember { mutableStateOf(false) }
 
-    // 👇 CAMBIO: Escucha "pantallaActual" para comprobar si hay invitaciones nuevas
+    // Escucha "pantallaActual" para comprobar si hay invitaciones nuevas
     LaunchedEffect(usuarioAuth, pantallaActual) {
         if (usuarioAuth != null) {
             val pendientes = GestorAuth.obtenerInvitacionesPendientes(usuarioAuth!!.uid)
@@ -140,7 +132,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-            // 👇 CAMBIO: Transiciones fluidas entre pantallas
+            // Transiciones fluidas entre pantallas
             AnimatedContent(
                 targetState = pantallaActual,
                 transitionSpec = {
@@ -155,7 +147,17 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                             onJugar = { coleccion ->
                                 coleccionParaJugar = coleccion
                                 GestorDatos.palabrasUsadasSesion.clear()
+                                GestorDatos.checkpointActivoId = null // Es una partida nueva
                                 opcionesConfiguradas = null
+                                pantallaActual = PantallaNavegacion.CONFIG_JUEGO
+                            },
+                            // 👇 NUEVO: Callback para jugar desde un Checkpoint
+                            onJugarCheckpoint = { coleccion, checkpoint ->
+                                coleccionParaJugar = coleccion
+                                GestorDatos.palabrasUsadasSesion.clear()
+                                GestorDatos.palabrasUsadasSesion.addAll(checkpoint.palabrasUsadas)
+                                GestorDatos.checkpointActivoId = checkpoint.id
+                                opcionesConfiguradas = checkpoint.opciones
                                 pantallaActual = PantallaNavegacion.CONFIG_JUEGO
                             },
                             onGestionarJugadores = {

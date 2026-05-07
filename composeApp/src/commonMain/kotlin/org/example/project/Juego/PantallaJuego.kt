@@ -47,7 +47,7 @@ data class PalabraJuego(
     val palabra: String,
     val pista: String,
     val nombreGrupo: String? = null,
-    val imagenUrl: String? = null // 👇 NUEVO: Añadimos la URL al modelo temporal del juego
+    val imagenUrl: String? = null
 )
 
 @Composable
@@ -64,7 +64,6 @@ fun PantallaJuego(
                 is ElementoGuardado.Individual -> listOf(
                     PalabraJuego(
                         palabra = elemento.palabra.capitalizarPrimera(),
-                        // 👇 CAMBIO: Dividimos el texto por comas, limpiamos espacios y elegimos uno al azar
                         pista = elemento.pista.split(",")
                             .map { it.trim() }
                             .filter { it.isNotEmpty() }
@@ -76,7 +75,6 @@ fun PantallaJuego(
                 is ElementoGuardado.Conjunto -> elemento.palabras.map { p ->
                     PalabraJuego(
                         palabra = p.palabra.capitalizarPrimera(),
-                        // 👇 CAMBIO: Hacemos exactamente lo mismo para las palabras en grupo
                         pista = p.pista.split(",")
                             .map { it.trim() }
                             .filter { it.isNotEmpty() }
@@ -99,9 +97,31 @@ fun PantallaJuego(
         // Elegimos una aleatoria
         val elegida = if (palabrasDisponibles.isNotEmpty()) palabrasDisponibles.random() else todasLasPalabras.random()
 
-        // LA REGISTRAMOS COMO USADA
+        // 👇 LA REGISTRAMOS COMO USADA Y ACTUALIZAMOS CHECKPOINT 👇
         if (opciones.sinRepeticiones) {
             GestorDatos.palabrasUsadasSesion.add(elegida.palabra)
+
+            // AUTO-GUARDADO Y BORRADO DE CHECKPOINT
+            if (GestorDatos.checkpointActivoId != null) {
+                val cpActual = GestorDatos.checkpointsGlobales.find { it.id == GestorDatos.checkpointActivoId }
+                if (cpActual != null) {
+                    // Si con esta palabra se agotaron todas las palabras de la colección, destruimos el checkpoint
+                    if (GestorDatos.palabrasUsadasSesion.size >= todasLasPalabras.size) {
+                        GestorDatos.checkpointsGlobales.remove(cpActual)
+                        GestorDatos.checkpointActivoId = null
+                        GestorDatos.guardarCambiosMemoria()
+                    } else {
+                        // Si aún quedan, actualizamos las palabras usadas y la fecha
+                        val cpActualizado = cpActual.copy(
+                            palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
+                            fecha = System.currentTimeMillis()
+                        )
+                        val index = GestorDatos.checkpointsGlobales.indexOf(cpActual)
+                        GestorDatos.checkpointsGlobales[index] = cpActualizado
+                        GestorDatos.guardarCambiosMemoria()
+                    }
+                }
+            }
         }
 
         elegida
@@ -206,7 +226,7 @@ fun PantallaJuego(
                                         Text("¡No te descubras!", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                                     }
                                 } else {
-                                    // 👇 NUEVO: LOS CIVILES SÍ VEN LA FOTO (si existe)
+                                    // LOS CIVILES SÍ VEN LA FOTO (si existe)
                                     palabraElegida.imagenUrl?.let { url ->
                                         KamelImage(
                                             resource = asyncPainterResource(url),
