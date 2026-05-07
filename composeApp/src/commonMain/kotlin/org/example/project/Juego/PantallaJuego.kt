@@ -141,9 +141,25 @@ fun PantallaJuego(
     var mensajeVictoria by remember { mutableStateOf("") }
     var mostrarDialogoVotar by remember { mutableStateOf(false) }
 
+    // 👇 NUEVAS VARIABLES PARA LA ÚLTIMA OPORTUNIDAD 👇
+    var impostorDescubierto by remember { mutableStateOf(false) }
+    var adivinandoPalabra by remember { mutableStateOf(false) }
+    var tiempoAdivinar by remember { mutableStateOf(15) }
+    var textoBusquedaImpostor by remember { mutableStateOf("") } // Buscador del impostor
+
+    // 👇 LISTA PLANA DE TODAS LAS PALABRAS PARA QUE EL IMPOSTOR ELIJA 👇
+    val todasLasPalabrasStrings = remember(coleccion) {
+        coleccion.elementos.flatMap { el ->
+            when (el) {
+                is ElementoGuardado.Individual -> listOf(el.palabra.capitalizarPrimera())
+                is ElementoGuardado.Conjunto -> el.palabras.map { it.palabra.capitalizarPrimera() }
+            }
+        }.distinct().sorted()
+    }
+
     var haMiradoActual by remember { mutableStateOf(false) }
 
-    // Temporizador
+    // Temporizador de Debate
     LaunchedEffect(fase) {
         if (fase == FaseJuego.DEBATE && opciones.limiteTiempo) {
             while (tiempoRestante > 0 && fase == FaseJuego.DEBATE) {
@@ -154,6 +170,24 @@ fun PantallaJuego(
                     mensajeVictoria = "¡Se agotó el tiempo! Los impostores han ganado por sigilo."
                     fase = FaseJuego.RESULTADOS
                 }
+            }
+        }
+    }
+
+    // 👇 Temporizador para la última oportunidad del impostor 👇
+    LaunchedEffect(adivinandoPalabra) {
+        if (adivinandoPalabra) {
+            tiempoAdivinar = 15
+            textoBusquedaImpostor = "" // Reseteamos el buscador al empezar
+            while (tiempoAdivinar > 0 && adivinandoPalabra) {
+                delay(1000L)
+                tiempoAdivinar--
+            }
+            if (tiempoAdivinar <= 0 && adivinandoPalabra) {
+                ganadores = "CIVILES"
+                mensajeVictoria = "¡Se agotó el tiempo! El impostor no logró adivinar la palabra."
+                impostorDescubierto = false
+                adivinandoPalabra = false
             }
         }
     }
@@ -321,22 +355,138 @@ fun PantallaJuego(
             }
 
             FaseJuego.RESULTADOS -> {
-                Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("VICTORIA PARA", fontSize = 20.sp, color = Color.Gray)
-                    Text(ganadores, fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = if(ganadores == "CIVILES") Color(0xFF18C1A8) else Color(0xFFFF3D00))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(mensajeVictoria, textAlign = TextAlign.Center, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.height(40.dp))
-                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            val textoGrupo = palabraElegida.nombreGrupo?.let { " [$it]" } ?: ""
-                            Text("Palabra secreta: ${palabraElegida.palabra}$textoGrupo", fontWeight = FontWeight.Bold)
-                            Text("Impostores: ${impostores.joinToString(", ")}")
+                if (impostorDescubierto && !adivinandoPalabra) {
+                    // --- PANTALLA 1: IMPOSTOR DESCUBIERTO (Aviso previo) ---
+                    Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text("¡IMPOSTOR DESCUBIERTO!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFF6D00), textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(mensajeVictoria, textAlign = TextAlign.Center, fontSize = 20.sp)
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Text("Pero espera... El impostor tiene una última oportunidad para robar la victoria si adivina la palabra secreta.", textAlign = TextAlign.Center, fontSize = 16.sp, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(40.dp))
+
+                        Button(
+                            onClick = { adivinandoPalabra = true },
+                            modifier = Modifier.fillMaxWidth().height(80.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("INTENTAR ADIVINAR", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text("¡Cuidado! Solo tendrás 15 segundos", color = Color(0xFFFF6D00), fontSize = 12.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = {
+                                ganadores = "CIVILES"
+                                mensajeVictoria = "El impostor se ha rendido. ¡Victoria total para los civiles!"
+                                impostorDescubierto = false
+                            },
+                            modifier = Modifier.fillMaxWidth().height(60.dp),
+                            border = BorderStroke(2.dp, Color.Gray),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("RENDIRSE", color = Color.Gray, fontWeight = FontWeight.Bold)
                         }
                     }
-                    Spacer(modifier = Modifier.height(40.dp))
-                    Button(onClick = onSalir, modifier = Modifier.fillMaxWidth().height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Black)) {
-                        Text("VOLVER AL MENÚ", fontWeight = FontWeight.Bold)
+                } else if (adivinandoPalabra) {
+                    // --- PANTALLA 2: EL RELOJ ESTÁ CORRIENDO ---
+                    Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("¡RÁPIDO!", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text("00:${tiempoAdivinar.toString().padStart(2, '0')}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = if(tiempoAdivinar <= 5) Color.Red else Color.Black)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 👇 NUEVO BUSCADOR IMPLEMENTADO AQUÍ 👇
+                        OutlinedTextField(
+                            value = textoBusquedaImpostor,
+                            onValueChange = { textoBusquedaImpostor = it },
+                            placeholder = { Text("Buscar palabra...") },
+                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.Gray) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        val palabrasFiltradasImpostor = todasLasPalabrasStrings.filter {
+                            it.contains(textoBusquedaImpostor, ignoreCase = true)
+                        }
+
+                        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(palabrasFiltradasImpostor) { palabraOpcion ->
+                                Button(
+                                    onClick = {
+                                        if (palabraOpcion.equals(palabraElegida.palabra, ignoreCase = true)) {
+                                            ganadores = "IMPOSTOR"
+                                            mensajeVictoria = "¡Increíble! El impostor adivinó la palabra ($palabraOpcion) y ha robado la victoria."
+                                        } else {
+                                            ganadores = "CIVILES"
+                                            mensajeVictoria = "El impostor pensó que era '$palabraOpcion' y falló. ¡Los civiles ganan!"
+                                        }
+                                        adivinandoPalabra = false
+                                        impostorDescubierto = false
+                                        textoBusquedaImpostor = "" // Reseteamos por si acaso
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                    elevation = ButtonDefaults.buttonElevation(2.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(palabraOpcion, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // --- PANTALLA 3: RESULTADOS FINALES ---
+                    Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text("VICTORIA PARA", fontSize = 20.sp, color = Color.Gray)
+                        Text(ganadores, fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = if(ganadores == "CIVILES") Color(0xFF18C1A8) else Color(0xFFFF3D00))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(mensajeVictoria, textAlign = TextAlign.Center, fontSize = 18.sp)
+                        Spacer(modifier = Modifier.height(40.dp))
+
+                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+
+                                palabraElegida.imagenUrl?.let { url ->
+                                    KamelImage(
+                                        resource = asyncPainterResource(url),
+                                        contentDescription = "Imagen secreta revelada",
+                                        modifier = Modifier
+                                            .size(140.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .border(
+                                                width = 3.dp,
+                                                color = if(ganadores == "CIVILES") Color(0xFF18C1A8) else Color(0xFFFF3D00),
+                                                shape = RoundedCornerShape(16.dp)
+                                            ),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                }
+
+                                val textoGrupo = palabraElegida.nombreGrupo?.let { " [$it]" } ?: ""
+                                Text(
+                                    text = "Palabra secreta:\n${palabraElegida.palabra}$textoGrupo",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 22.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Impostores:\n${impostores.joinToString(", ")}",
+                                    color = Color.Gray,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(40.dp))
+                        Button(onClick = onSalir, modifier = Modifier.fillMaxWidth().height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Black)) {
+                            Text("VOLVER AL MENÚ", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -350,11 +500,12 @@ fun PantallaJuego(
             onVotoConfirmado = { haGanadoCivil, nombreExpulsado ->
                 mostrarDialogoVotar = false
                 if (haGanadoCivil) {
-                    ganadores = "CIVILES"
-                    mensajeVictoria = "¡Increíble! Habéis descubierto a $nombreExpulsado."
+                    impostorDescubierto = true
+                    mensajeVictoria = "Habéis atrapado a $nombreExpulsado."
                 } else {
                     ganadores = "IMPOSTOR"
-                    mensajeVictoria = "¡ERROR! $nombreExpulsado era inocente. Los impostores ganan."
+                    mensajeVictoria = "¡ERROR! $nombreExpulsado era inocente. Los impostores ganan por votación errónea."
+                    impostorDescubierto = false
                 }
                 fase = FaseJuego.RESULTADOS
             },
