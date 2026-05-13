@@ -8,6 +8,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.example.project.Datos.GestorAuth
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 
 // 👇 NUEVO: Movido aquí desde App.kt para poder guardarlo
 @Serializable
@@ -63,7 +66,8 @@ object GestorDatos {
     private val settings = Settings()
     private const val KEY_COLECCIONES = "mis_colecciones_v1"
     private const val KEY_JUGADORES = "mis_jugadores_v1"
-    private const val KEY_CHECKPOINTS = "mis_checkpoints_v1" // 👇 NUEVO
+    private const val KEY_CHECKPOINTS = "mis_checkpoints_v1"
+    private const val KEY_TUTORIAL = "paso_tutorial_v1" // 👇 NUEVO
 
     // Evita que la app se rompa al leer datos antiguos a los que les faltan campos
     private val jsonConfig = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -71,11 +75,13 @@ object GestorDatos {
     val coleccionesGlobales = mutableStateListOf<ColeccionGuardada>()
     val jugadoresGlobales = mutableStateListOf<String>()
 
-    // 👇 NUEVO: Listado de checkpoints y el ID del activo
     val checkpointsGlobales = mutableStateListOf<CheckpointJuego>()
     var checkpointActivoId: String? = null
 
     val palabrasUsadasSesion = mutableStateListOf<String>()
+
+    // 👇 NUEVO: Estado global del tutorial interactivo (0 = inicio, 99 = terminado)
+    var pasoTutorialActual by mutableStateOf(0)
 
     fun cargarDatos() {
         val jsonColecciones = settings.getString(KEY_COLECCIONES, "")
@@ -96,7 +102,6 @@ object GestorDatos {
             } catch (e: Exception) { println("Error cargar jugadores: ${e.message}") }
         }
 
-        // 👇 NUEVO: Cargar los checkpoints guardados
         val jsonCheckpoints = settings.getString(KEY_CHECKPOINTS, "")
         if (jsonCheckpoints.isNotEmpty()) {
             try {
@@ -105,6 +110,9 @@ object GestorDatos {
                 checkpointsGlobales.addAll(datosCheckpoints)
             } catch (e: Exception) { println("Error cargar checkpoints: ${e.message}") }
         }
+
+        // 👇 NUEVO: Cargar en qué paso se quedó el usuario
+        pasoTutorialActual = settings.getInt(KEY_TUTORIAL, 0)
     }
 
     fun guardarCambiosMemoria() {
@@ -114,9 +122,19 @@ object GestorDatos {
         val jsonJugadores = jsonConfig.encodeToString(jugadoresGlobales.toList())
         settings.putString(KEY_JUGADORES, jsonJugadores)
 
-        // 👇 NUEVO: Guardar los checkpoints actualizados
         val jsonCheckpoints = jsonConfig.encodeToString(checkpointsGlobales.toList())
         settings.putString(KEY_CHECKPOINTS, jsonCheckpoints)
+    }
+
+    // 👇 NUEVO: Funciones para controlar el avance del tutorial
+    fun avanzarTutorial(nuevoPaso: Int) {
+        pasoTutorialActual = nuevoPaso
+        settings.putInt(KEY_TUTORIAL, nuevoPaso)
+    }
+
+    fun terminarTutorial() {
+        pasoTutorialActual = 99
+        settings.putInt(KEY_TUTORIAL, 99)
     }
 
     fun guardarNuevaColeccion(coleccion: ColeccionGuardada) {
@@ -140,7 +158,20 @@ object GestorDatos {
     fun limpiarDatosLocales() {
         coleccionesGlobales.clear()
         jugadoresGlobales.clear()
+        checkpointsGlobales.clear() // 👇 AÑADIDO
+        checkpointActivoId = null     // 👇 AÑADIDO
         guardarCambiosMemoria()
+    }
+
+    suspend fun subirCheckpointsNube(uid: String) {
+        try {
+            GestorAuth.firestore.collection("usuarios").document(uid)
+                .update(mapOf("checkpoints" to checkpointsGlobales.toList()))
+        } catch (e: Exception) {
+            // Si el campo no existe todavía, usamos set con merge
+            GestorAuth.firestore.collection("usuarios").document(uid)
+                .set(mapOf("checkpoints" to checkpointsGlobales.toList()), merge = true)
+        }
     }
 
     suspend fun descargarDatosNube(uid: String) {
@@ -161,6 +192,13 @@ object GestorDatos {
                     val jugadoresNube = docUsuario.get<List<String>>("jugadores")
                     jugadoresGlobales.clear()
                     jugadoresGlobales.addAll(jugadoresNube)
+                } catch (e: Exception) { }
+
+                // 👇 NUEVO: Descargar checkpoints
+                try {
+                    val checkpointsNube = docUsuario.get<List<CheckpointJuego>>("checkpoints")
+                    checkpointsGlobales.clear()
+                    checkpointsGlobales.addAll(checkpointsNube)
                 } catch (e: Exception) { }
             }
             guardarCambiosMemoria()
@@ -334,4 +372,6 @@ object GestorDatos {
             } catch (e: Exception) { println("Error actualizando al creador: ${e.message}") }
         }
     }
+
+
 }

@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -30,7 +31,6 @@ import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
 import androidx.compose.ui.text.style.TextOverflow
 
-// 👇 NUEVOS IMPORTS PARA LA FECHA
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,7 +38,7 @@ import java.util.Locale
 @Composable
 fun PantallaInicio(
     onJugar: (ColeccionGuardada) -> Unit,
-    onJugarCheckpoint: (ColeccionGuardada, CheckpointJuego) -> Unit = { _, _ -> }, // 👇 NUEVO
+    onJugarCheckpoint: (ColeccionGuardada, CheckpointJuego) -> Unit = { _, _ -> },
     onGestionarJugadores: () -> Unit,
     onCrearLista: () -> Unit,
     onIrAPerfil: () -> Unit,
@@ -46,9 +46,11 @@ fun PantallaInicio(
 ) {
     val usuarioAuth by GestorAuth.usuario.collectAsState()
     var urlFotoPerfil by remember { mutableStateOf<String?>(null) }
-
-    // 👇 NUEVO: Estado para el diálogo de borrar checkpoint
     var checkpointParaBorrar by remember { mutableStateOf<CheckpointJuego?>(null) }
+
+    // Obtenemos el paso del tutorial
+    val pasoTutorial = GestorDatos.pasoTutorialActual
+    val esTutorialActivo = pasoTutorial == 1
 
     LaunchedEffect(usuarioAuth) {
         if (usuarioAuth != null) {
@@ -59,18 +61,13 @@ fun PantallaInicio(
         }
     }
 
-    // 👇 NUEVO: Obtenemos los checkpoints guardados ordenados por fecha
     val misCheckpoints = GestorDatos.checkpointsGlobales.sortedByDescending { it.fecha }
-
     val misCreaciones = GestorDatos.coleccionesGlobales.filter { !it.esDescargada && !it.esColaboracion }
     val recientes = misCreaciones.takeLast(3).reversed()
-
     val misDescargas = GestorDatos.coleccionesGlobales.filter { it.esDescargada && !it.esColaboracion }
     val descargasRecientes = misDescargas.takeLast(3).reversed()
-
     val misColaboraciones = GestorDatos.coleccionesGlobales.filter { it.esColaboracion }
     val colaboracionesRecientes = misColaboraciones.takeLast(3).reversed()
-
     val predeterminadas = DatosPredeterminados.listasPredeterminadas
 
     var coleccionViendoInfo by remember { mutableStateOf<ColeccionGuardada?>(null) }
@@ -84,43 +81,37 @@ fun PantallaInicio(
             Text("¡Juega con Unmask!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
             IconButton(
-                onClick = onIrAPerfil,
+                onClick = { if (!esTutorialActivo) onIrAPerfil() }, // BLOQUEO TUTORIAL
                 modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFFFF4E6))
             ) {
                 if (!urlFotoPerfil.isNullOrEmpty()) {
                     if (urlFotoPerfil!!.startsWith("http")) {
-                        KamelImage(
-                            asyncPainterResource(urlFotoPerfil!!),
-                            contentDescription = "Foto de perfil",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                        KamelImage(asyncPainterResource(urlFotoPerfil!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                     } else {
                         val bitmap = decodificarBase64Imagen(urlFotoPerfil!!)
                         if (bitmap != null) {
-                            ComposeImage(
-                                bitmap = bitmap,
-                                contentDescription = "Foto de perfil",
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
+                            ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                         } else {
-                            Icon(Icons.Rounded.AccountCircle, contentDescription = "Perfil", modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
+                            Icon(Icons.Rounded.AccountCircle, null, modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
                         }
                     }
                 } else {
-                    Icon(Icons.Rounded.AccountCircle, contentDescription = "Perfil", modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
+                    Icon(Icons.Rounded.AccountCircle, null, modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
                 }
             }
         }
 
+        // TARJETA JUGADORES (BLOQUEADA EN TUTORIAL)
         Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onGestionarJugadores() },
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF18C1A8)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .alpha(if (esTutorialActivo) 0.5f else 1f)
+                .clickable(enabled = !esTutorialActivo) { onGestionarJugadores() },
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF18C1A8))
         ) {
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                Icon(Icons.Rounded.Group, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text("Los jugadores de hoy", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
@@ -131,40 +122,36 @@ fun PantallaInicio(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 👇 NUEVO: 0. CHECKPOINTS (Partidas en pausa)
+        // CHECKPOINTS (BLOQUEADOS EN TUTORIAL)
         if (misCheckpoints.isNotEmpty()) {
             SeccionTitulo(titulo = "Partidas en Pausa", icono = Icons.Rounded.SaveAs)
             Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
                 items(misCheckpoints) { checkpoint ->
                     val coleccionAsociada = GestorDatos.coleccionesGlobales.find { it.nombre == checkpoint.nombreColeccion && it.idCreador == checkpoint.idCreadorColeccion }
                     if (coleccionAsociada != null) {
                         TarjetaCheckpoint(
                             checkpoint = checkpoint,
                             coleccion = coleccionAsociada,
-                            onJugarClick = { onJugarCheckpoint(coleccionAsociada, checkpoint) },
-                            onBorrarClick = { checkpointParaBorrar = checkpoint }
+                            onJugarClick = { if(!esTutorialActivo) onJugarCheckpoint(coleccionAsociada, checkpoint) },
+                            onBorrarClick = { if(!esTutorialActivo) checkpointParaBorrar = checkpoint }
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                    } else {
-                        // Si la colección ya no existe, auto-limpiamos el checkpoint
-                        GestorDatos.checkpointsGlobales.remove(checkpoint)
-                        GestorDatos.guardarCambiosMemoria()
                     }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 1. CREACIONES RECIENTES (TUS LISTAS)
+        // TUS CREACIONES (BLOQUEADAS EN TUTORIAL)
         if (recientes.isNotEmpty()) {
             SeccionTitulo(titulo = "Creaciones Recientes", icono = Icons.Rounded.Stars)
             Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
                 items(recientes) { coleccion ->
                     TarjetaColeccionInicio(
                         coleccion = coleccion, esPredeterminada = false,
-                        onJugarClick = { onJugar(coleccion) }, onInfoClick = { coleccionViendoInfo = coleccion }
+                        onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                 }
@@ -172,142 +159,100 @@ fun PantallaInicio(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // 2. COLECCIONES PREDETERMINADAS
+        // PREDETERMINADAS (BLOQUEADAS EN TUTORIAL)
         SeccionTitulo(titulo = "Colecciones Predeterminadas", icono = Icons.Rounded.Info)
         Spacer(modifier = Modifier.height(8.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
             items(predeterminadas) { predefinida ->
                 val coleccionGuardada = GestorDatos.convertirPredefinidaAGuardada(predefinida)
                 TarjetaColeccionInicio(
                     coleccion = coleccionGuardada, esPredeterminada = true,
-                    onJugarClick = { onJugar(coleccionGuardada) },
-                    onInfoClick = { coleccionViendoInfo = coleccionGuardada }
+                    onJugarClick = { if(!esTutorialActivo) onJugar(coleccionGuardada) },
+                    onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccionGuardada }
                 )
                 Spacer(modifier = Modifier.width(12.dp))
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 3. COLABORACIONES
-        if (colaboracionesRecientes.isNotEmpty()) {
-            SeccionTitulo(titulo = "Colaboraciones", icono = Icons.Rounded.Handshake)
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                items(colaboracionesRecientes) { coleccion ->
-                    TarjetaColeccionInicio(
-                        coleccion = coleccion, esPredeterminada = false,
-                        onJugarClick = { onJugar(coleccion) },
-                        onInfoClick = { coleccionViendoInfo = coleccion },
-                        onAutorClick = { coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } }
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // 4. LISTAS DESCARGADAS
-        if (descargasRecientes.isNotEmpty()) {
-            SeccionTitulo(titulo = "Listas Descargadas", icono = Icons.Rounded.CloudDownload)
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                items(descargasRecientes) { coleccion ->
-                    TarjetaColeccionInicio(
-                        coleccion = coleccion, esPredeterminada = false,
-                        onJugarClick = { onJugar(coleccion) },
-                        onInfoClick = { coleccionViendoInfo = coleccion },
-                        onAutorClick = { coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } }
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        if (misCreaciones.isEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4E6)),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, Color(0xFFFFD8C2))
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Rounded.EditNote, contentDescription = null, tint = Color(0xFFFF6D00), modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Crea tu propia lista", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1A1A1A))
-                    Text(
-                        "Añade tus palabras favoritas y compártelas con la comunidad.",
-                        textAlign = TextAlign.Center, fontSize = 14.sp, color = Color.Gray,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-                    )
-                    Button(
-                        onClick = onCrearLista,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("CREAR AHORA", fontWeight = FontWeight.Bold)
+        // COLABORACIONES Y DESCARGAS (BLOQUEADAS EN TUTORIAL)
+        if (colaboracionesRecientes.isNotEmpty() || descargasRecientes.isNotEmpty()) {
+            if (colaboracionesRecientes.isNotEmpty()) {
+                SeccionTitulo(titulo = "Colaboraciones", icono = Icons.Rounded.Handshake)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
+                    items(colaboracionesRecientes) { coleccion ->
+                        TarjetaColeccionInicio(coleccion = coleccion, esPredeterminada = false, onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }, onAutorClick = { if(!esTutorialActivo) coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } })
+                        Spacer(modifier = Modifier.width(12.dp))
                     }
                 }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+            if (descargasRecientes.isNotEmpty()) {
+                SeccionTitulo(titulo = "Listas Descargadas", icono = Icons.Rounded.CloudDownload)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
+                    items(descargasRecientes) { coleccion ->
+                        TarjetaColeccionInicio(coleccion = coleccion, esPredeterminada = false, onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }, onAutorClick = { if(!esTutorialActivo) coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } })
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(64.dp))
-    }
-
-    if (coleccionViendoInfo != null) {
-        DialogoInfoColeccion(coleccion = coleccionViendoInfo!!, onCerrar = { coleccionViendoInfo = null })
-    }
-
-    // 👇 NUEVO: DIÁLOGO DE BORRAR CHECKPOINT
-    if (checkpointParaBorrar != null) {
-        AlertDialog(
-            onDismissRequest = { checkpointParaBorrar = null },
-            title = { Text("¿Finalizar y borrar Checkpoint?") },
-            text = { Text("Si borras '${checkpointParaBorrar!!.nombre}', no podrás retomar esta partida donde la dejaste. ¿Estás seguro?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    GestorDatos.checkpointsGlobales.removeAll { it.id == checkpointParaBorrar!!.id }
-                    GestorDatos.guardarCambiosMemoria()
-                    checkpointParaBorrar = null
-                }) { Text("BORRAR", color = Color.Red, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { checkpointParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) }
+        // LA ÚNICA TARJETA HABILITADA DURANTE EL TUTORIAL
+        Spacer(modifier = Modifier.height(8.dp))
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clickable { onCrearLista() }, // SIEMPRE HABILITADA PARA AVANZAR
+            colors = CardDefaults.cardColors(containerColor = if (esTutorialActivo) Color(0xFFE0F2F1) else Color(0xFFFFF4E6)),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(2.dp, if (esTutorialActivo) Color(0xFF18C1A8) else Color(0xFFFFD8C2))
+        ) {
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(if (esTutorialActivo) Icons.Rounded.AdsClick else Icons.Rounded.EditNote, contentDescription = null, tint = if (esTutorialActivo) Color(0xFF18C1A8) else Color(0xFFFF6D00), modifier = Modifier.size(48.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(if (esTutorialActivo) "¡PULSA AQUÍ PARA EMPEZAR!" else "Crea tu propia lista", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1A1A1A))
+                Text(
+                    "Añade tus palabras favoritas y compártelas con la comunidad.",
+                    textAlign = TextAlign.Center, fontSize = 14.sp, color = Color.Gray,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                )
+                Button(
+                    onClick = onCrearLista,
+                    colors = ButtonDefaults.buttonColors(containerColor = if (esTutorialActivo) Color(0xFF18C1A8) else Color(0xFFFF6D00)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (esTutorialActivo) "CREAR LISTA" else "CREAR AHORA", fontWeight = FontWeight.Bold)
+                }
             }
-        )
+        }
+
+        Spacer(modifier = Modifier.height(100.dp))
+    }
+
+    if (coleccionViendoInfo != null) DialogoInfoColeccion(coleccion = coleccionViendoInfo!!, onCerrar = { coleccionViendoInfo = null })
+    if (checkpointParaBorrar != null) {
+        AlertDialog(onDismissRequest = { checkpointParaBorrar = null }, title = { Text("¿Finalizar y borrar?") }, text = { Text("¿Seguro que quieres borrar '${checkpointParaBorrar!!.nombre}'?") }, confirmButton = { TextButton(onClick = { GestorDatos.checkpointsGlobales.removeAll { it.id == checkpointParaBorrar!!.id }; GestorDatos.guardarCambiosMemoria(); checkpointParaBorrar = null }) { Text("BORRAR", color = Color.Red, fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { checkpointParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) } })
     }
 }
 
 @Composable
 fun SeccionTitulo(titulo: String, icono: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icono, contentDescription = null, tint = Color.Gray)
-        Spacer(modifier = Modifier.width(8.dp))
+        Icon(icono, null, tint = Color.Gray); Spacer(modifier = Modifier.width(8.dp))
         Text(titulo, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
     }
 }
 
 @Composable
-fun TarjetaColeccionInicio(
-    coleccion: ColeccionGuardada,
-    esPredeterminada: Boolean,
-    onJugarClick: () -> Unit,
-    onInfoClick: () -> Unit,
-    onAutorClick: (() -> Unit)? = null
-) {
+fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boolean, onJugarClick: () -> Unit, onInfoClick: () -> Unit, onAutorClick: (() -> Unit)? = null) {
     val totalPalabras = coleccion.elementos.sumOf { if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size }
     var urlFoto by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(coleccion.idCreador) {
-        if (!esPredeterminada && coleccion.idCreador != null) {
-            val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador)
-            urlFoto = perfil?.fotoPerfil
-        }
-    }
+    LaunchedEffect(coleccion.idCreador) { if (!esPredeterminada && coleccion.idCreador != null) { val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador); urlFoto = perfil?.fotoPerfil } }
 
     val containerColor: Color
     val textColor: Color
@@ -317,131 +262,40 @@ fun TarjetaColeccionInicio(
     val border: BorderStroke?
 
     when {
-        esPredeterminada -> {
-            containerColor = Color(0xFFE0F2F1)
-            textColor = Color(0xFF121212)
-            categoryColor = Color(0xFF00897B)
-            infoColor = Color.Gray
-            picBorderColor = Color(0xFF18C1A8)
-            border = BorderStroke(1.dp, Color(0xFFB2DFDB))
-        }
-        coleccion.esColaboracion -> { // Naranja para colaboraciones
-            containerColor = Color(0xFFFFF3E0)
-            textColor = Color(0xFFE65100)
-            categoryColor = Color(0xFFFF6D00)
-            infoColor = Color(0xFFF57C00)
-            picBorderColor = Color(0xFFFF6D00)
-            border = BorderStroke(1.dp, Color(0xFFFFE0B2))
-        }
-        coleccion.esDescargada -> { // AZUL
-            containerColor = Color(0xFFE3F2FD)
-            textColor = Color(0xFF0D47A1)
-            categoryColor = Color(0xFFFF6D00)
-            infoColor = Color(0xFF1976D2)
-            picBorderColor = Color(0xFF1976D2)
-            border = BorderStroke(1.dp, Color(0xFF90CAF9))
-        }
-        else -> {
-            containerColor = Color(0xFF181818)
-            textColor = Color.White
-            categoryColor = Color(0xFFFF6D00)
-            infoColor = Color.LightGray
-            picBorderColor = Color(0xFFFF6D00)
-            border = null
-        }
+        esPredeterminada -> { containerColor = Color(0xFFE0F2F1); textColor = Color(0xFF121212); categoryColor = Color(0xFF00897B); infoColor = Color.Gray; picBorderColor = Color(0xFF18C1A8); border = BorderStroke(1.dp, Color(0xFFB2DFDB)) }
+        coleccion.esColaboracion -> { containerColor = Color(0xFFFFF3E0); textColor = Color(0xFFE65100); categoryColor = Color(0xFFFF6D00); infoColor = Color(0xFFF57C00); picBorderColor = Color(0xFFFF6D00); border = BorderStroke(1.dp, Color(0xFFFFE0B2)) }
+        coleccion.esDescargada -> { containerColor = Color(0xFFE3F2FD); textColor = Color(0xFF0D47A1); categoryColor = Color(0xFFFF6D00); infoColor = Color(0xFF1976D2); picBorderColor = Color(0xFF1976D2); border = BorderStroke(1.dp, Color(0xFF90CAF9)) }
+        else -> { containerColor = Color(0xFF181818); textColor = Color.White; categoryColor = Color(0xFFFF6D00); infoColor = Color.LightGray; picBorderColor = Color(0xFFFF6D00); border = null }
     }
 
-    Card(
-        modifier = Modifier
-            .width(160.dp)
-            .height(240.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onJugarClick() },
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (esPredeterminada || coleccion.esDescargada || coleccion.esColaboracion) 0.dp else 4.dp),
-        border = border
-    ) {
+    Card(modifier = Modifier.width(160.dp).height(240.dp).clip(RoundedCornerShape(16.dp)).clickable { onJugarClick() }, colors = CardDefaults.cardColors(containerColor = containerColor), elevation = CardDefaults.cardElevation(defaultElevation = if (esPredeterminada || coleccion.esDescargada || coleccion.esColaboracion) 0.dp else 4.dp), border = border) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(containerColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (esPredeterminada) {
-                        Text("U", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
-                    } else if (!urlFoto.isNullOrEmpty()) {
-                        if (urlFoto!!.startsWith("http")) {
-                            KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        } else {
+                Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(containerColor), contentAlignment = Alignment.Center) {
+                    if (esPredeterminada) Text("U", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
+                    else if (!urlFoto.isNullOrEmpty()) {
+                        if (urlFoto!!.startsWith("http")) KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        else {
                             val bitmap = decodificarBase64Imagen(urlFoto!!)
-                            if (bitmap != null) {
-                                ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                            } else {
-                                Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
-                            }
+                            if (bitmap != null) ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            else Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
                         }
-                    } else {
-                        Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
                     }
+                    else Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = picBorderColor)
                 }
-
                 Spacer(modifier = Modifier.width(8.dp))
-
                 Column(modifier = Modifier.weight(1f)) {
-                    val textoAutor = when {
-                        esPredeterminada -> "Unmask Oficial"
-                        coleccion.esDescargada || coleccion.esColaboracion -> "Por @${coleccion.nombreCreador ?: "investigador"}"
-                        else -> "Por Mí"
-                    }
-
-                    Text(
-                        text = textoAutor,
-                        fontSize = 11.sp,
-                        fontWeight = if (textoAutor == "Por Mí") FontWeight.Bold else FontWeight.Medium,
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.let {
-                            if ((coleccion.esDescargada || coleccion.esColaboracion) && onAutorClick != null && !esPredeterminada) {
-                                it.clickable { onAutorClick.invoke() }
-                            } else it
-                        }
-                    )
+                    val textoAutor = when { esPredeterminada -> "Unmask Oficial"; coleccion.esDescargada || coleccion.esColaboracion -> "Por @${coleccion.nombreCreador ?: "investigador"}"; else -> "Por Mí" }
+                    Text(text = textoAutor, fontSize = 11.sp, fontWeight = if (textoAutor == "Por Mí") FontWeight.Bold else FontWeight.Medium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.let { if ((coleccion.esDescargada || coleccion.esColaboracion) && onAutorClick != null && !esPredeterminada) it.clickable { onAutorClick.invoke() } else it })
                     Text("$totalPalabras pal.", fontSize = 10.sp, color = infoColor, maxLines = 1)
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(coleccion.nombre, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Surface(
-                color = if (esPredeterminada) Color(0xFFB2DFDB) else if (coleccion.esColaboracion) Color(0xFFFFE0B2) else if (coleccion.esDescargada) Color(0xFFBBDEFB) else Color(0xFF2C2C2C),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = categoryColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-            HorizontalDivider(color = infoColor, thickness = 1.dp)
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(modifier = Modifier.height(12.dp)); Text(coleccion.nombre, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(modifier = Modifier.height(6.dp)); Surface(color = if (esPredeterminada) Color(0xFFB2DFDB) else if (coleccion.esColaboracion) Color(0xFFFFE0B2) else if (coleccion.esDescargada) Color(0xFFBBDEFB) else Color(0xFF2C2C2C), shape = RoundedCornerShape(8.dp)) { Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = categoryColor, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Spacer(modifier = Modifier.weight(1f)); HorizontalDivider(color = infoColor, thickness = 1.dp); Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onInfoClick, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Rounded.Info, contentDescription = "Información", tint = infoColor, modifier = Modifier.size(18.dp))
-                }
-                Button(
-                    onClick = onJugarClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = if (esPredeterminada) Color(0xFF18C1A8) else Color(0xFFFF6D00)),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Jugar", modifier = Modifier.size(12.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text("JUGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
+                IconButton(onClick = onInfoClick, modifier = Modifier.size(28.dp)) { Icon(Icons.Rounded.Info, null, tint = infoColor, modifier = Modifier.size(18.dp)) }
+                Button(onClick = onJugarClick, colors = ButtonDefaults.buttonColors(containerColor = if (esPredeterminada) Color(0xFF18C1A8) else Color(0xFFFF6D00)), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), modifier = Modifier.height(28.dp)) { Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(12.dp)); Spacer(Modifier.width(2.dp)); Text("JUGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
             }
         }
     }
@@ -450,15 +304,8 @@ fun TarjetaColeccionInicio(
 @Composable
 fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
     var textoBusqueda by remember { mutableStateOf("") }
-    val todasLasPalabras = remember(coleccion) {
-        coleccion.elementos.flatMap { elemento ->
-            when (elemento) {
-                is ElementoGuardado.Individual -> listOf(elemento.palabra)
-                is ElementoGuardado.Conjunto -> elemento.palabras.map { it.palabra }
-            }
-        }
-    }
-    val palabrasFiltradas = todasLasPalabras.filter { it.contains(textoBusqueda, ignoreCase = true) }
+    val todasLasPalabras = remember(coleccion) { coleccion.elementos.flatMap { when (it) { is ElementoGuardado.Individual -> listOf(it.palabra); is ElementoGuardado.Conjunto -> it.palabras.map { p -> p.palabra } } } }
+    val filtradas = todasLasPalabras.filter { it.contains(textoBusqueda, ignoreCase = true) }
 
     Dialog(onDismissRequest = onCerrar) {
         Card(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
@@ -468,18 +315,16 @@ fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
                         Text(coleccion.nombre, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text(coleccion.categoria, color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
-                    IconButton(onClick = onCerrar) { Icon(Icons.Rounded.Close, contentDescription = "Cerrar") }
+                    IconButton(onClick = onCerrar) { Icon(Icons.Rounded.Close, null) }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = textoBusqueda, onValueChange = { textoBusqueda = it }, placeholder = { Text("Buscar palabra...") }, leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50), singleLine = true
-                )
+                OutlinedTextField(value = textoBusqueda, onValueChange = { textoBusqueda = it }, placeholder = { Text("Buscar palabra...") }, leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50), singleLine = true)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Contiene ${todasLasPalabras.size} palabras en total", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                Text("Contiene ${todasLasPalabras.size} palabras", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(palabrasFiltradas) { palabra ->
+                    items(filtradas) { p ->
                         Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFF5F5F5), shape = RoundedCornerShape(8.dp)) {
-                            Text(text = palabra, modifier = Modifier.padding(12.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Text(p, modifier = Modifier.padding(12.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -488,19 +333,12 @@ fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
     }
 }
 
-// 👇 NUEVO: COMPONENTE VISUAL DE LA TARJETA DE CHECKPOINT
 @Composable
-fun TarjetaCheckpoint(
-    checkpoint: CheckpointJuego,
-    coleccion: ColeccionGuardada,
-    onJugarClick: () -> Unit,
-    onBorrarClick: () -> Unit
-) {
+fun TarjetaCheckpoint(checkpoint: CheckpointJuego, coleccion: ColeccionGuardada, onJugarClick: () -> Unit, onBorrarClick: () -> Unit) {
     val formatter = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
     val fechaTexto = formatter.format(Date(checkpoint.fecha))
-
-    // 👇 NUEVO: Cargamos la foto del creador igual que en las otras tarjetas
     var urlFoto by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(coleccion.idCreador) {
         if (coleccion.idCreador != null) {
             val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador)
@@ -508,90 +346,35 @@ fun TarjetaCheckpoint(
         }
     }
 
-    Card(
-        modifier = Modifier
-            .width(160.dp) // Igualamos el ancho a las demás tarjetas
-            .height(240.dp) // Igualamos el alto para que no se corte nada
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onJugarClick() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF4A148C)), // Color especial (morado)
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
+    Card(modifier = Modifier.width(160.dp).height(240.dp).clip(RoundedCornerShape(16.dp)).clickable { onJugarClick() }, colors = CardDefaults.cardColors(containerColor = Color(0xFF4A148C)), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
-
-            // Título y botón borrar
             Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = checkpoint.nombre,
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onBorrarClick, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Rounded.DeleteOutline, contentDescription = "Borrar", tint = Color(0xFFFF8A80))
-                }
+                Text(text = checkpoint.nombre, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                IconButton(onClick = onBorrarClick, modifier = Modifier.size(24.dp)) { Icon(Icons.Rounded.DeleteOutline, null, tint = Color(0xFFFF8A80)) }
             }
-
             Text(fechaTexto, color = Color.LightGray, fontSize = 10.sp)
             Spacer(modifier = Modifier.height(12.dp))
-
-            // 👇 NUEVO: Bloque del Autor (Foto y Nombre)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(Color(0xFF4A148C)),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(Color(0xFF4A148C)), contentAlignment = Alignment.Center) {
                     if (!urlFoto.isNullOrEmpty()) {
-                        if (urlFoto!!.startsWith("http")) {
-                            KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        } else {
+                        if (urlFoto!!.startsWith("http")) KamelImage(asyncPainterResource(urlFoto!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        else {
                             val bitmap = decodificarBase64Imagen(urlFoto!!)
-                            if (bitmap != null) {
-                                ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                            } else {
-                                Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
+                            if (bitmap != null) ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            else Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
-                    } else {
-                        Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
+                    } else Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
-
                 Spacer(modifier = Modifier.width(8.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    val textoAutor = coleccion.nombreCreador?.let { "Por @$it" } ?: "Por Anónimo"
-                    Text(
-                        text = textoAutor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(text = coleccion.nombreCreador?.let { "Por @$it" } ?: "Por Anónimo", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-
             Spacer(modifier = Modifier.height(12.dp))
-
-            // Info de progreso
             Text("Lista: ${coleccion.nombre}", color = Color(0xFFCE93D8), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             Text("${checkpoint.palabrasUsadas.size} pal. usadas", color = Color(0xFFCE93D8), fontSize = 11.sp)
-
             Spacer(modifier = Modifier.weight(1f))
-
-            // Botón jugar
-            Button(
-                onClick = onJugarClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)),
-                modifier = Modifier.fillMaxWidth().height(32.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+            Button(onClick = onJugarClick, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)), modifier = Modifier.fillMaxWidth().height(32.dp), contentPadding = PaddingValues(0.dp)) {
+                Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("CONTINUAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }

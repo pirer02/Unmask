@@ -50,11 +50,13 @@ fun PantallaConfiguracion(
     var mostrarDialogoGuardarCheckpoint by remember { mutableStateOf(false) }
     var mostrarDialogoCargarCheckpoint by remember { mutableStateOf(false) }
     var mostrarRecordatorioCheckpoint by remember { mutableStateOf(false) }
-    var mostrarAvisoSalirSinGuardar by remember { mutableStateOf(false) } // 👇 NUEVO
+    var mostrarAvisoSalirSinGuardar by remember { mutableStateOf(false) }
     var nombreNuevoCheckpoint by remember { mutableStateOf("") }
 
+    // 👇 Obtenemos el paso del tutorial actual
+    val pasoTutorial = GestorDatos.pasoTutorialActual
+
     // --- LÓGICA DE DETECCIÓN DE CAMBIOS SIN GUARDAR ---
-    // Comparamos el estado actual de la UI y la sesión de palabras con el checkpoint activo
     val tieneCambiosSinGuardar = remember(
         sinRepeticiones, numImpostores, pistaParaImpostor, limiteRondas, rondas,
         limiteTiempo, tiempoMinutos, GestorDatos.palabrasUsadasSesion.size, GestorDatos.checkpointActivoId
@@ -64,20 +66,21 @@ fun PantallaConfiguracion(
         val cpActual = GestorDatos.checkpointsGlobales.find { it.id == GestorDatos.checkpointActivoId }
 
         if (cpActual == null) {
-            // Si no hay checkpoint pero ya hay progreso de palabras, hay cambios
             GestorDatos.palabrasUsadasSesion.isNotEmpty()
         } else {
-            // Si hay checkpoint, comparamos si la sesión actual o las opciones han cambiado
             val opcionesActuales = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
-
             cpActual.palabrasUsadas != GestorDatos.palabrasUsadasSesion.toList() ||
                     cpActual.opciones != opcionesActuales
         }
     }
 
-    // BLOQUEO DEL BOTÓN ATRÁS DEL SISTEMA (Android hardware back)
-    androidx.activity.compose.BackHandler(enabled = tieneCambiosSinGuardar) {
-        mostrarAvisoSalirSinGuardar = true
+    // 👇 BLOQUEO DEL BOTÓN ATRÁS DEL SISTEMA (Android hardware back)
+    androidx.activity.compose.BackHandler(enabled = pasoTutorial == 4 || tieneCambiosSinGuardar) {
+        if (pasoTutorial == 4) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("Inicia la partida para continuar el tutorial o pulsa Omitir arriba.") }
+        } else {
+            mostrarAvisoSalirSinGuardar = true
+        }
     }
 
     val maxImpostores = max(1, jugadores.size / 3)
@@ -96,8 +99,14 @@ fun PantallaConfiguracion(
         // CABECERA
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
-                if (tieneCambiosSinGuardar) mostrarAvisoSalirSinGuardar = true
-                else onVolver()
+                // 👇 Impedir salir si estamos en el paso 4 del tutorial
+                if (pasoTutorial == 4) {
+                    coroutineScope.launch { snackbarHostState.showSnackbar("Inicia la partida para continuar el tutorial o pulsa Omitir arriba.") }
+                } else if (tieneCambiosSinGuardar) {
+                    mostrarAvisoSalirSinGuardar = true
+                } else {
+                    onVolver()
+                }
             }) {
                 Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver")
             }
@@ -108,6 +117,12 @@ fun PantallaConfiguracion(
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+            // 👇 NUEVO: Espaciador dinámico para que el cartel del tutorial no tape las primeras opciones
+            if (pasoTutorial == 4) {
+                Spacer(modifier = Modifier.height(200.dp))
+            }
+
             TarjetaConfig(onClick = onIrAJugadores) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
@@ -142,7 +157,6 @@ fun PantallaConfiguracion(
                 }
             }
 
-            // TARJETA NO REPETIR PALABRAS
             TarjetaConfig {
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -259,14 +273,18 @@ fun PantallaConfiguracion(
             ) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(28.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("INICIAR PARTIDA", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                // 👇 Destacar el texto del botón si estamos en el paso 4 del tutorial
+                Text(
+                    text = if (pasoTutorial == 4) "¡INICIA LA PARTIDA AQUÍ!" else "INICIAR PARTIDA",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Spacer(modifier = Modifier.height(64.dp))
         }
     }
 
-    // 👇 NUEVO: DIÁLOGO AVISO SALIR SIN GUARDAR 👇
     if (mostrarAvisoSalirSinGuardar) {
         AlertDialog(
             onDismissRequest = { mostrarAvisoSalirSinGuardar = false },
@@ -277,7 +295,7 @@ fun PantallaConfiguracion(
                 Button(
                     onClick = {
                         mostrarAvisoSalirSinGuardar = false
-                        mostrarDialogoGuardarCheckpoint = true // Redirigimos a guardar
+                        mostrarDialogoGuardarCheckpoint = true
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
                     modifier = Modifier.fillMaxWidth()
@@ -288,7 +306,7 @@ fun PantallaConfiguracion(
                     TextButton(
                         onClick = {
                             mostrarAvisoSalirSinGuardar = false
-                            onVolver() // Salimos ignorando todo
+                            onVolver()
                         }
                     ) { Text("IGNORAR Y SALIR", color = Color.Red) }
 
@@ -299,8 +317,6 @@ fun PantallaConfiguracion(
             }
         )
     }
-
-    // --- DIÁLOGOS DE GESTIÓN (Checkpoint y Recordatorio) ---
 
     if (mostrarRecordatorioCheckpoint) {
         Dialog(onDismissRequest = { mostrarRecordatorioCheckpoint = false }) {
@@ -350,6 +366,9 @@ fun PantallaConfiguracion(
         )
     }
 
+    // 👇 AÑADE ESTA LÍNEA AL PRINCIPIO DE PantallaConfiguracion PARA TENER EL UID
+    val usuarioAuth by GestorAuth.usuario.collectAsState()
+
     if (mostrarDialogoGuardarCheckpoint) {
         val cpsDeEstaLista = GestorDatos.checkpointsGlobales.filter { it.nombreColeccion == coleccion.nombre && it.idCreadorColeccion == coleccion.idCreador }
         AlertDialog(
@@ -364,13 +383,23 @@ fun PantallaConfiguracion(
                         LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
                             items(cpsDeEstaLista) { cp ->
                                 Text(text = "Actualizar: ${cp.nombre}", color = Color(0xFFFF6D00), modifier = Modifier.fillMaxWidth().clickable {
-                                    val actualizado = cp.copy(fecha = System.currentTimeMillis(), palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(), opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones))
+                                    val actualizado = cp.copy(
+                                        fecha = System.currentTimeMillis(),
+                                        palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
+                                        opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
+                                    )
                                     val index = GestorDatos.checkpointsGlobales.indexOf(cp)
                                     GestorDatos.checkpointsGlobales[index] = actualizado
                                     GestorDatos.checkpointActivoId = actualizado.id
                                     GestorDatos.guardarCambiosMemoria()
+
+                                    // 👇 NUEVO: Sincronización inmediata con la nube
+                                    usuarioAuth?.uid?.let { uid ->
+                                        coroutineScope.launch { GestorDatos.subirCheckpointsNube(uid) }
+                                    }
+
                                     mostrarDialogoGuardarCheckpoint = false
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Checkpoint actualizado") }
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Checkpoint actualizado en la nube") }
                                 }.padding(vertical = 8.dp))
                             }
                         }
@@ -380,12 +409,25 @@ fun PantallaConfiguracion(
             confirmButton = {
                 Button(onClick = {
                     if (nombreNuevoCheckpoint.isNotBlank()) {
-                        val nuevoCp = CheckpointJuego(nombre = nombreNuevoCheckpoint.trim(), fecha = System.currentTimeMillis(), nombreColeccion = coleccion.nombre, idCreadorColeccion = coleccion.idCreador, palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(), opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones))
+                        val nuevoCp = CheckpointJuego(
+                            nombre = nombreNuevoCheckpoint.trim(),
+                            fecha = System.currentTimeMillis(),
+                            nombreColeccion = coleccion.nombre,
+                            idCreadorColeccion = coleccion.idCreador,
+                            palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
+                            opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
+                        )
                         GestorDatos.checkpointsGlobales.add(nuevoCp)
                         GestorDatos.checkpointActivoId = nuevoCp.id
                         GestorDatos.guardarCambiosMemoria()
+
+                        // 👇 NUEVO: Sincronización inmediata con la nube
+                        usuarioAuth?.uid?.let { uid ->
+                            coroutineScope.launch { GestorDatos.subirCheckpointsNube(uid) }
+                        }
+
                         mostrarDialogoGuardarCheckpoint = false
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Nuevo checkpoint creado") }
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Nuevo checkpoint guardado en la nube") }
                     }
                 }, enabled = nombreNuevoCheckpoint.isNotBlank()) { Text("CREAR NUEVO") }
             },

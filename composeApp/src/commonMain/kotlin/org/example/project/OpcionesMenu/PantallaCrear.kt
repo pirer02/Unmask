@@ -117,7 +117,6 @@ fun PantallaCrear(
 
     fun validarDuplicadosGlobales() {
         val palabrasVistas = mutableSetOf<String>()
-        // 👇 CAMBIO: Hemos eliminado pistasVistas porque ya no nos importa si se repiten
 
         elementos.forEach { el ->
             when (el) {
@@ -128,7 +127,6 @@ fun PantallaCrear(
                     if (pLimpia.isNotEmpty() && !palabrasVistas.add(pLimpia)) {
                         el.data.errorPalabra = true; el.data.mensajeErrorPalabra = "Repetida"
                     }
-                    // 👇 CAMBIO: Eliminada la comprobación de duplicados para la pista
                 }
                 is ElementoUI.Conjunto -> {
                     el.palabras.forEach { p ->
@@ -138,7 +136,6 @@ fun PantallaCrear(
                         if (pLimpia.isNotEmpty() && !palabrasVistas.add(pLimpia)) {
                             p.errorPalabra = true; p.mensajeErrorPalabra = "Repetida"
                         }
-                        // 👇 CAMBIO: Eliminada la comprobación de duplicados para la pista en los grupos
                     }
                 }
             }
@@ -259,6 +256,11 @@ fun PantallaCrear(
         estaCargando = false
     }
 
+    // 👇 NUEVO: Bloquear el botón físico de atrás en Android si el tutorial está en el paso 2
+    androidx.activity.compose.BackHandler(enabled = GestorDatos.pasoTutorialActual == 2) {
+        coroutineScope.launch { snackbarHostState.showSnackbar("Para salir, pulsa 'Omitir Tutorial' arriba a la derecha.") }
+    }
+
     val opcionesTeclado = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
 
     if (estaCargando) {
@@ -283,7 +285,14 @@ fun PantallaCrear(
             // CABECERA
             Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onVolver) {
+                    IconButton(onClick = {
+                        // 👇 NUEVO: Comprobamos si está en el paso del tutorial para que no se escape
+                        if (GestorDatos.pasoTutorialActual == 2) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Guarda tu lista con 3 palabras para continuar.") }
+                        } else {
+                            onVolver()
+                        }
+                    }) {
                         Icon(
                             Icons.Rounded.ArrowBack,
                             contentDescription = "Volver"
@@ -322,6 +331,7 @@ fun PantallaCrear(
                         onClick = {
                             var hayError = false
                             var primerIndiceError = -1
+                            var totalPalabrasRellenas = 0 // 👇 NUEVO: Contador de palabras para el tutorial
 
                             if (nombreColeccion.trim().isBlank()) {
                                 errorNombreCol = true; hayError = true; primerIndiceError = 0
@@ -336,6 +346,9 @@ fun PantallaCrear(
                                 val indiceRealEnLista = index + 1
                                 when (el) {
                                     is ElementoUI.Individual -> {
+                                        // Sumamos al contador si ambos campos están llenos
+                                        if (el.data.palabra.isNotBlank() && el.data.pista.isNotBlank()) totalPalabrasRellenas++
+
                                         if (el.data.palabra.isBlank() || el.data.pista.isBlank() || el.data.errorPalabra || el.data.errorPista) {
                                             if (el.data.palabra.isBlank()) el.data.errorPalabra =
                                                 true
@@ -353,6 +366,9 @@ fun PantallaCrear(
                                                 indiceRealEnLista
                                         }
                                         el.palabras.forEach { p ->
+                                            // Sumamos al contador si ambos campos están llenos
+                                            if (p.palabra.isNotBlank() && p.pista.isNotBlank()) totalPalabrasRellenas++
+
                                             if (p.palabra.isBlank() || p.pista.isBlank() || p.errorPalabra || p.errorPista) {
                                                 if (p.palabra.isBlank()) p.errorPalabra = true
                                                 if (p.pista.isBlank()) p.errorPista = true
@@ -363,6 +379,12 @@ fun PantallaCrear(
                                         }
                                     }
                                 }
+                            }
+
+                            // 👇 NUEVA LÓGICA DEL TUTORIAL: Exigir mínimo 3 palabras
+                            if (GestorDatos.pasoTutorialActual == 2 && totalPalabrasRellenas < 3) {
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Para el tutorial, añade al menos 3 palabras de prueba.") }
+                                return@Button // Cortamos la ejecución, no se guarda aún
                             }
 
                             if (hayError) {
@@ -397,7 +419,6 @@ fun PantallaCrear(
                                             usuarioActual!!.uid
                                         ) else null
 
-                                    // 👇 SE PRESERVA LA LISTA DE LIKES PARA NO PERDERLOS AL EDITAR 👇
                                     val nuevaLista = ColeccionGuardada(
                                         nombre = nombreColeccion.capitalizarPrimeraCrear(),
                                         categoria = categoriaColeccion.capitalizarPrimeraCrear(),
@@ -653,7 +674,6 @@ fun PantallaCrear(
                                         onValueChange = {
                                             elemento.data.pista = it; validarDuplicadosGlobales()
                                         },
-                                        // 👇 CAMBIO: Modificamos el label
                                         label = { Text("Pista(s) separadas por coma") },
                                         keyboardOptions = opcionesTeclado,
                                         isError = elemento.data.errorPista,
@@ -798,7 +818,6 @@ fun PantallaCrear(
                                                                 p.pista =
                                                                     it; validarDuplicadosGlobales()
                                                             },
-                                                            // 👇 CAMBIO: Modificamos el placeholder
                                                             placeholder = { Text("Pista(s) separadas por coma") },
                                                             keyboardOptions = opcionesTeclado,
                                                             isError = p.errorPista,

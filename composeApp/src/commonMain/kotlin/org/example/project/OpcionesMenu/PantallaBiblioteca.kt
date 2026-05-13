@@ -41,7 +41,10 @@ fun PantallaBiblioteca(
     var textoBusqueda by remember { mutableStateOf("") }
     var filtroSeleccionado by remember { mutableStateOf("Todas") }
 
-    // 👇 CAMBIO: Filtramos y además ORDENAMOS por prioridad
+    // 👇 NUEVO: Obtenemos el paso del tutorial actual
+    val pasoTutorial = GestorDatos.pasoTutorialActual
+    var mostrarAvisoTutorial by remember { mutableStateOf(false) }
+
     val coleccionesFiltradas = colecciones.filter { coleccion ->
         val coincideTexto = textoBusqueda.isBlank() ||
                 coleccion.nombre.contains(textoBusqueda, ignoreCase = true) ||
@@ -56,11 +59,10 @@ fun PantallaBiblioteca(
 
         coincideTexto && coincideTipo
     }.sortedBy { coleccion ->
-        // Asignamos la prioridad de aparición
         when {
-            !coleccion.esDescargada && !coleccion.esColaboracion -> 1 // 1º Las tuyas
-            coleccion.esColaboracion -> 2                             // 2º Las colaborativas
-            else -> 3                                                 // 3º Las descargadas online
+            !coleccion.esDescargada && !coleccion.esColaboracion -> 1
+            coleccion.esColaboracion -> 2
+            else -> 3
         }
     }
 
@@ -91,7 +93,6 @@ fun PantallaBiblioteca(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 👇 CAMBIO: Añadido "Colaboraciones" a la lista de opciones
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val opcionesFiltro = listOf("Todas", "Mías", "Descargadas", "Colaboraciones")
             items(opcionesFiltro) { filtro ->
@@ -127,14 +128,37 @@ fun PantallaBiblioteca(
                 items(coleccionesFiltradas) { coleccion ->
                     TarjetaColeccion(
                         coleccion = coleccion,
-                        onEliminarClick = { coleccionParaBorrar = coleccion },
-                        onEditarClick = { onEditar(coleccion) },
+                        pasoTutorial = pasoTutorial, // 👇 NUEVO: Le pasamos el paso a la tarjeta
+                        onEliminarClick = {
+                            // 👇 NUEVO: Bloqueamos eliminar en el tutorial
+                            if (pasoTutorial == 3) mostrarAvisoTutorial = true
+                            else coleccionParaBorrar = coleccion
+                        },
+                        onEditarClick = {
+                            // 👇 NUEVO: Bloqueamos editar en el tutorial
+                            if (pasoTutorial == 3) mostrarAvisoTutorial = true
+                            else onEditar(coleccion)
+                        },
                         onJugarClick = { onJugar(coleccion) },
                         onAutorClick = { coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } }
                     )
                 }
             }
         }
+    }
+
+    // 👇 NUEVO: Aviso si intenta editar/borrar durante el paso 3
+    if (mostrarAvisoTutorial) {
+        AlertDialog(
+            onDismissRequest = { mostrarAvisoTutorial = false },
+            title = { Text("Sigue el tutorial") },
+            text = { Text("Para continuar con el tutorial, debes pulsar el botón 'JUGAR' en tu lista para ver cómo se configura una partida.") },
+            confirmButton = {
+                TextButton(onClick = { mostrarAvisoTutorial = false }) {
+                    Text("ENTENDIDO", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 
     if (coleccionParaBorrar != null) {
@@ -185,6 +209,7 @@ fun PantallaBiblioteca(
 @Composable
 fun TarjetaColeccion(
     coleccion: ColeccionGuardada,
+    pasoTutorial: Int = 0, // 👇 NUEVO: Parámetro para saber si destacar el botón
     onEliminarClick: () -> Unit,
     onEditarClick: () -> Unit,
     onJugarClick: () -> Unit,
@@ -198,7 +223,6 @@ fun TarjetaColeccion(
         }
     }
 
-    // 👇 CAMBIO: Definición de colores con Modo Oscuro para tus listas
     val colorFondo: Color
     val borderStroke: BorderStroke?
     val colorTitulo: Color
@@ -209,7 +233,7 @@ fun TarjetaColeccion(
     val colorBotonJugar: Color
 
     when {
-        coleccion.esColaboracion -> { // Naranja Ámbar Fuerte (Colaboraciones)
+        coleccion.esColaboracion -> {
             colorFondo = Color(0xFFFFF3E0)
             borderStroke = BorderStroke(1.dp, Color(0xFFFFE0B2))
             colorTitulo = Color(0xFF1A1A1A)
@@ -217,9 +241,9 @@ fun TarjetaColeccion(
             colorFondoChip = Color.White
             colorSeparador = Color(0xFFFFE0B2)
             colorIconoEdit = Color.Gray
-            colorBotonJugar = Color(0xFF18C1A8) // Verde Azulado
+            colorBotonJugar = Color(0xFF18C1A8)
         }
-        coleccion.esDescargada -> { // Azul (Online)
+        coleccion.esDescargada -> {
             colorFondo = Color(0xFFE3F2FD)
             borderStroke = BorderStroke(1.dp, Color(0xFFBBDEFB))
             colorTitulo = Color(0xFF1A1A1A)
@@ -227,9 +251,9 @@ fun TarjetaColeccion(
             colorFondoChip = Color.White
             colorSeparador = Color(0xFFBBDEFB)
             colorIconoEdit = Color.Gray
-            colorBotonJugar = Color(0xFF18C1A8) // Verde Azulado
+            colorBotonJugar = Color(0xFF18C1A8)
         }
-        else -> { // Mías (Modo Oscuro)
+        else -> {
             colorFondo = Color(0xFF181818)
             borderStroke = null
             colorTitulo = Color.White
@@ -237,9 +261,12 @@ fun TarjetaColeccion(
             colorFondoChip = Color(0xFF2C2C2C)
             colorSeparador = Color.DarkGray
             colorIconoEdit = Color.LightGray
-            colorBotonJugar = Color(0xFFFF6D00) // Naranja principal
+            colorBotonJugar = Color(0xFFFF6D00)
         }
     }
+
+    // 👇 NUEVO: Determinamos si este es el botón a destacar en el paso 3
+    val esObjetivoTutorial = pasoTutorial == 3 && !coleccion.esDescargada && !coleccion.esColaboracion
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -298,17 +325,22 @@ fun TarjetaColeccion(
                             )
                         }
 
-                        // 👇 CAMBIO: Solo mostramos el lápiz de editar si NO es una lista descargada
                         if (!coleccion.esDescargada) {
                             IconButton(onClick = onEditarClick) {
                                 Icon(Icons.Rounded.Edit, contentDescription = null, tint = colorIconoEdit)
                             }
                         }
                     }
-                    Button(onClick = onJugarClick, colors = ButtonDefaults.buttonColors(containerColor = colorBotonJugar), contentPadding = PaddingValues(horizontal = 16.dp)) {
+
+                    // 👇 CAMBIO: Aplicamos el color y texto especial si es el objetivo del tutorial
+                    Button(
+                        onClick = onJugarClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = if (esObjetivoTutorial) Color(0xFF18C1A8) else colorBotonJugar),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
                         Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("JUGAR", fontSize = 12.sp)
+                        Text(if (esObjetivoTutorial) "¡PULSA AQUÍ!" else "JUGAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

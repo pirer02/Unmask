@@ -75,6 +75,9 @@ fun PantallaExplorar(
     var coleccionViendoInfo by remember { mutableStateOf<ColeccionGuardada?>(null) }
     var coleccionParaBorrarDescarga by remember { mutableStateOf<ColeccionGuardada?>(null) }
 
+    // 👇 NUEVO: Obtenemos el paso del tutorial actual
+    val pasoTutorial = GestorDatos.pasoTutorialActual
+
     LaunchedEffect(usuario, vistaActual) {
         if (usuario != null && vistaActual == VistaExplorar.FEED && feedGlobal.isEmpty()) {
             cargandoFeed = true
@@ -118,6 +121,11 @@ fun PantallaExplorar(
         }
     }
 
+    // 👇 NUEVO: Bloqueamos el botón físico de retroceso de Android en el paso 5
+    androidx.activity.compose.BackHandler(enabled = pasoTutorial == 5) {
+        scope.launch { snackbarHostState.showSnackbar("¡Pulsa FINALIZAR en el mensaje para terminar el tutorial!") }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color(0xFFF9F9F9)
@@ -132,7 +140,10 @@ fun PantallaExplorar(
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 IconButton(onClick = {
-                    if (vistaActual == VistaExplorar.PERFIL_USUARIO) {
+                    // 👇 NUEVO: Bloqueo de la flecha de volver
+                    if (pasoTutorial == 5) {
+                        scope.launch { snackbarHostState.showSnackbar("¡Pulsa FINALIZAR en el mensaje para terminar el tutorial!") }
+                    } else if (vistaActual == VistaExplorar.PERFIL_USUARIO) {
                         vistaActual = VistaExplorar.FEED
                     } else {
                         onVolver()
@@ -163,7 +174,14 @@ fun PantallaExplorar(
                             )
                             Spacer(modifier = Modifier.height(24.dp))
                             Button(
-                                onClick = onIrAPerfilLogin,
+                                onClick = {
+                                    // 👇 NUEVO: Impedir ir al perfil antes de acabar el tutorial
+                                    if (pasoTutorial == 5) {
+                                        scope.launch { snackbarHostState.showSnackbar("¡Termina el tutorial primero para iniciar sesión!") }
+                                    } else {
+                                        onIrAPerfilLogin()
+                                    }
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -237,7 +255,6 @@ fun PantallaExplorar(
                                                 Text("No se encontraron investigadores", color = Color.Gray)
                                             }
                                         } else {
-                                            // Los usuarios se mantienen en una lista vertical normal de 1 fila
                                             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                                                 items(resultadosBusqueda) { perfil ->
                                                     TarjetaUsuarioBuscado(
@@ -316,7 +333,6 @@ fun PantallaExplorar(
                                                 Text("No hay listas que coincidan con tu búsqueda.", color = Color.Gray)
                                             }
                                         } else {
-                                            // 👇 NUEVO: Grid de 2 columnas para el feed de comunidad
                                             LazyVerticalGrid(
                                                 columns = GridCells.Fixed(2),
                                                 modifier = Modifier.fillMaxSize(),
@@ -415,7 +431,6 @@ fun PantallaExplorar(
 
                                             Spacer(modifier = Modifier.height(24.dp))
 
-                                            // 👇 ÚNICA FILA CON SEGUIDORES Y BOTÓN SEGUIR (Sin duplicados)
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -460,7 +475,6 @@ fun PantallaExplorar(
                                                 }
                                             }
 
-                                            // 👇 AQUÍ EMPIEZA DIRECTAMENTE LA DESCRIPCIÓN
                                             if (!perfilSeleccionado!!.descripcion.isNullOrBlank()) {
                                                 Spacer(modifier = Modifier.height(20.dp))
                                                 Surface(
@@ -488,7 +502,6 @@ fun PantallaExplorar(
                                             Text("Este usuario no tiene listas públicas.", color = Color.Gray)
                                         }
                                     } else {
-                                        // Grid de 2 columnas para el perfil ajeno
                                         LazyVerticalGrid(
                                             columns = GridCells.Fixed(2),
                                             modifier = Modifier.fillMaxSize(),
@@ -696,7 +709,6 @@ fun TarjetaComunidad(
     var likeDado by remember { mutableStateOf(miUid != null && coleccion.usuariosLikes.contains(miUid)) }
     var likesActuales by remember { mutableStateOf(coleccion.likes) }
 
-    // 👇 NUEVO: Comprobamos si el usuario ya es un colaborador activo de esta lista
     val esColaborador = miUid != null && coleccion.colaboradores.contains(miUid)
     val estaDescargada = GestorDatos.coleccionesGlobales.any { it.nombre == coleccion.nombre && it.idCreador == coleccion.idCreador }
 
@@ -801,7 +813,6 @@ fun TarjetaComunidad(
                     }
                     Spacer(Modifier.width(4.dp))
 
-                    // 👇 NUEVO: Si eres colaborador, no puedes descargarla de nuevo
                     if (esColaborador) {
                         Icon(Icons.Rounded.Group, contentDescription = "Colaborador", tint = Color(0xFFFF6D00), modifier = Modifier.size(18.dp).padding(4.dp))
                     } else {

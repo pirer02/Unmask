@@ -1,3 +1,4 @@
+import androidx.activity.compose.BackHandler // 👇 Añadido para controlar el botón de atrás
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch // 👇 Añadido para poder usar la nube
+import kotlinx.coroutines.launch
 import org.example.project.Datos.*
 
 // Herramienta de capitalización para nombres
@@ -29,8 +30,13 @@ fun PantallaJugadores(
     jugadores: MutableList<String>,
     onVolver: () -> Unit
 ) {
+    // 👇 NUEVO: Manejador del botón físico de retroceso de Android
+    BackHandler {
+        onVolver()
+    }
+
     var nuevoJugador by remember { mutableStateOf("") }
-    var errorTexto by remember { mutableStateOf("") } // Para notificar errores al usuario
+    var errorTexto by remember { mutableStateOf("") }
 
     var editandoIndex by remember { mutableStateOf<Int?>(null) }
     var textoEdicion by remember { mutableStateOf("") }
@@ -63,7 +69,7 @@ fun PantallaJugadores(
                     value = nuevoJugador,
                     onValueChange = {
                         nuevoJugador = it
-                        errorTexto = "" // Limpiamos el error al escribir
+                        errorTexto = ""
                     },
                     placeholder = { Text("Nombre del jugador...") },
                     modifier = Modifier.weight(1f),
@@ -84,7 +90,6 @@ fun PantallaJugadores(
                             jugadores.add(nombreLimpio.capitalizarNombre())
                             GestorDatos.guardarCambiosMemoria()
 
-                            // 👇 MÁGIA DE LA NUBE: Guardar al añadir
                             usuarioLogueado?.let { user -> scope.launch { GestorDatos.subirJugadoresNube(user.uid) } }
 
                             nuevoJugador = ""
@@ -99,7 +104,6 @@ fun PantallaJugadores(
                     Icon(Icons.Rounded.Add, contentDescription = "Añadir", modifier = Modifier.size(32.dp))
                 }
             }
-            // Mensaje de error dinámico debajo de la casilla
             if (errorTexto.isNotEmpty()) {
                 Text(
                     text = errorTexto,
@@ -139,7 +143,6 @@ fun PantallaJugadores(
                                     )
                                     IconButton(onClick = {
                                         val editadoLimpio = textoEdicion.trim()
-                                        // Comprobamos que no se repita con otros nombres al editar
                                         val existe = jugadores.filterIndexed { i, _ -> i != index }
                                             .any { it.equals(editadoLimpio, ignoreCase = true) }
 
@@ -147,7 +150,6 @@ fun PantallaJugadores(
                                             jugadores[index] = editadoLimpio.capitalizarNombre()
                                             GestorDatos.guardarCambiosMemoria()
 
-                                            // 👇 MÁGIA DE LA NUBE: Guardar al editar
                                             usuarioLogueado?.let { user -> scope.launch { GestorDatos.subirJugadoresNube(user.uid) } }
 
                                             editandoIndex = null
@@ -175,7 +177,6 @@ fun PantallaJugadores(
                                     jugadores.removeAt(index)
                                     GestorDatos.guardarCambiosMemoria()
 
-                                    // 👇 MÁGIA DE LA NUBE: Guardar al eliminar uno
                                     usuarioLogueado?.let { user -> scope.launch { GestorDatos.subirJugadoresNube(user.uid) } }
 
                                     if (editandoIndex == index) editandoIndex = null
@@ -201,7 +202,6 @@ fun PantallaJugadores(
                     jugadores.clear()
                     GestorDatos.guardarCambiosMemoria()
 
-                    // 👇 MÁGIA DE LA NUBE: Guardar al vaciar la lista
                     usuarioLogueado?.let { user -> scope.launch { GestorDatos.subirJugadoresNube(user.uid) } }
 
                     mostrarAvisoBorrarTodos = false

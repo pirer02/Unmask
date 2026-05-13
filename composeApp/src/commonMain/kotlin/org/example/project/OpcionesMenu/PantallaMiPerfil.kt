@@ -1045,6 +1045,10 @@ fun PantallaMiPerfil(
                         cargandoAuth = true
                         listasSeleccionadas.forEach { GestorDatos.subirColeccionNube(usuarioAuth!!.uid, it) }
                         GestorDatos.subirJugadoresNube(usuarioAuth!!.uid)
+
+                        // 👇 NUEVA LÍNEA: Subir también los checkpoints al confirmar
+                        GestorDatos.subirCheckpointsNube(usuarioAuth!!.uid)
+
                         GestorDatos.descargarDatosNube(usuarioAuth!!.uid)
                         mostrarDialogoMigracion = false
                         snackbarHostState.showSnackbar("¡Todo sincronizado!")
