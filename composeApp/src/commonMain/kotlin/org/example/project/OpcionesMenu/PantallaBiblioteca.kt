@@ -38,10 +38,17 @@ fun PantallaBiblioteca(
     val usuarioAuth by GestorAuth.usuario.collectAsState()
     val scope = rememberCoroutineScope()
 
-    var textoBusqueda by remember { mutableStateOf("") }
-    var filtroSeleccionado by remember { mutableStateOf("Todas") }
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosBiblioteca(idiomaActual)
 
-    // 👇 NUEVO: Obtenemos el paso del tutorial actual
+    var textoBusqueda by remember { mutableStateOf("") }
+    var filtroSeleccionado by remember { mutableStateOf(textos.filtroTodas) }
+
+    // Actualizamos el filtro seleccionado si cambia el idioma para que no se rompa la lógica
+    LaunchedEffect(idiomaActual) {
+        filtroSeleccionado = textos.filtroTodas
+    }
+
     val pasoTutorial = GestorDatos.pasoTutorialActual
     var mostrarAvisoTutorial by remember { mutableStateOf(false) }
 
@@ -51,9 +58,9 @@ fun PantallaBiblioteca(
                 coleccion.categoria.contains(textoBusqueda, ignoreCase = true)
 
         val coincideTipo = when (filtroSeleccionado) {
-            "Mías" -> !coleccion.esDescargada && !coleccion.esColaboracion
-            "Descargadas" -> coleccion.esDescargada && !coleccion.esColaboracion
-            "Colaboraciones" -> coleccion.esColaboracion
+            textos.filtroMias -> !coleccion.esDescargada && !coleccion.esColaboracion
+            textos.filtroDescargadas -> coleccion.esDescargada && !coleccion.esColaboracion
+            textos.filtroColaboraciones -> coleccion.esColaboracion
             else -> true
         }
 
@@ -67,13 +74,13 @@ fun PantallaBiblioteca(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Mi Biblioteca", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(textos.titulo, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
             value = textoBusqueda,
             onValueChange = { textoBusqueda = it },
-            placeholder = { Text("Buscar listas...") },
+            placeholder = { Text(textos.buscarListas) },
             leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
             trailingIcon = {
                 if (textoBusqueda.isNotEmpty()) {
@@ -94,7 +101,7 @@ fun PantallaBiblioteca(
         Spacer(modifier = Modifier.height(12.dp))
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val opcionesFiltro = listOf("Todas", "Mías", "Descargadas", "Colaboraciones")
+            val opcionesFiltro = listOf(textos.filtroTodas, textos.filtroMias, textos.filtroDescargadas, textos.filtroColaboraciones)
             items(opcionesFiltro) { filtro ->
                 FilterChip(
                     selected = filtroSeleccionado == filtro,
@@ -118,9 +125,9 @@ fun PantallaBiblioteca(
         if (coleccionesFiltradas.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                 if (colecciones.isEmpty()) {
-                    Text("Aún no tienes ninguna lista creada.", color = Color.Gray)
+                    Text(textos.sinListas, color = Color.Gray)
                 } else {
-                    Text("No se encontraron resultados.", color = Color.Gray)
+                    Text(textos.sinResultados, color = Color.Gray)
                 }
             }
         } else {
@@ -128,14 +135,13 @@ fun PantallaBiblioteca(
                 items(coleccionesFiltradas) { coleccion ->
                     TarjetaColeccion(
                         coleccion = coleccion,
-                        pasoTutorial = pasoTutorial, // 👇 NUEVO: Le pasamos el paso a la tarjeta
+                        pasoTutorial = pasoTutorial,
+                        textos = textos,
                         onEliminarClick = {
-                            // 👇 NUEVO: Bloqueamos eliminar en el tutorial
                             if (pasoTutorial == 3) mostrarAvisoTutorial = true
                             else coleccionParaBorrar = coleccion
                         },
                         onEditarClick = {
-                            // 👇 NUEVO: Bloqueamos editar en el tutorial
                             if (pasoTutorial == 3) mostrarAvisoTutorial = true
                             else onEditar(coleccion)
                         },
@@ -147,15 +153,14 @@ fun PantallaBiblioteca(
         }
     }
 
-    // 👇 NUEVO: Aviso si intenta editar/borrar durante el paso 3
     if (mostrarAvisoTutorial) {
         AlertDialog(
             onDismissRequest = { mostrarAvisoTutorial = false },
-            title = { Text("Sigue el tutorial") },
-            text = { Text("Para continuar con el tutorial, debes pulsar el botón 'JUGAR' en tu lista para ver cómo se configura una partida.") },
+            title = { Text(textos.tituloTutorial) },
+            text = { Text(textos.descTutorial) },
             confirmButton = {
                 TextButton(onClick = { mostrarAvisoTutorial = false }) {
-                    Text("ENTENDIDO", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                    Text(textos.btnEntendido, color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -165,12 +170,12 @@ fun PantallaBiblioteca(
         val esColaboracion = coleccionParaBorrar!!.esColaboracion
         AlertDialog(
             onDismissRequest = { coleccionParaBorrar = null },
-            title = { Text(if (esColaboracion) "¿Abandonar colaboración?" else "¿Eliminar colección?") },
+            title = { Text(if (esColaboracion) textos.tituloAbandonar else textos.tituloEliminar) },
             text = {
                 if (esColaboracion) {
-                    Text("¿Seguro que quieres dejar de colaborar en '${coleccionParaBorrar?.nombre}'? Perderás el acceso a la lista, pero el creador conservará los cambios que hayas hecho.")
+                    Text("${textos.descAbandonar1}${coleccionParaBorrar?.nombre}${textos.descAbandonar2}")
                 } else {
-                    Text("¿Estás seguro de que quieres borrar '${coleccionParaBorrar?.nombre}'? Esta acción no se puede deshacer.")
+                    Text("${textos.descEliminar1}${coleccionParaBorrar?.nombre}${textos.descEliminar2}")
                 }
             },
             confirmButton = {
@@ -197,10 +202,10 @@ fun PantallaBiblioteca(
                         }
                     }
                     coleccionParaBorrar = null
-                }) { Text(if (esColaboracion) "ABANDONAR" else "ELIMINAR", color = Color(0xFFFF3D00)) }
+                }) { Text(if (esColaboracion) textos.btnAbandonar else textos.btnEliminar, color = Color(0xFFFF3D00)) }
             },
             dismissButton = {
-                TextButton(onClick = { coleccionParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) }
+                TextButton(onClick = { coleccionParaBorrar = null }) { Text(textos.btnCancelar, color = Color.Gray) }
             }
         )
     }
@@ -209,7 +214,8 @@ fun PantallaBiblioteca(
 @Composable
 fun TarjetaColeccion(
     coleccion: ColeccionGuardada,
-    pasoTutorial: Int = 0, // 👇 NUEVO: Parámetro para saber si destacar el botón
+    pasoTutorial: Int = 0,
+    textos: TextosBiblioteca,
     onEliminarClick: () -> Unit,
     onEditarClick: () -> Unit,
     onJugarClick: () -> Unit,
@@ -234,38 +240,16 @@ fun TarjetaColeccion(
 
     when {
         coleccion.esColaboracion -> {
-            colorFondo = Color(0xFFFFF3E0)
-            borderStroke = BorderStroke(1.dp, Color(0xFFFFE0B2))
-            colorTitulo = Color(0xFF1A1A1A)
-            colorAcento = Color(0xFFE65100)
-            colorFondoChip = Color.White
-            colorSeparador = Color(0xFFFFE0B2)
-            colorIconoEdit = Color.Gray
-            colorBotonJugar = Color(0xFF18C1A8)
+            colorFondo = Color(0xFFFFF3E0); borderStroke = BorderStroke(1.dp, Color(0xFFFFE0B2)); colorTitulo = Color(0xFF1A1A1A); colorAcento = Color(0xFFE65100); colorFondoChip = Color.White; colorSeparador = Color(0xFFFFE0B2); colorIconoEdit = Color.Gray; colorBotonJugar = Color(0xFF18C1A8)
         }
         coleccion.esDescargada -> {
-            colorFondo = Color(0xFFE3F2FD)
-            borderStroke = BorderStroke(1.dp, Color(0xFFBBDEFB))
-            colorTitulo = Color(0xFF1A1A1A)
-            colorAcento = Color(0xFF1976D2)
-            colorFondoChip = Color.White
-            colorSeparador = Color(0xFFBBDEFB)
-            colorIconoEdit = Color.Gray
-            colorBotonJugar = Color(0xFF18C1A8)
+            colorFondo = Color(0xFFE3F2FD); borderStroke = BorderStroke(1.dp, Color(0xFFBBDEFB)); colorTitulo = Color(0xFF1A1A1A); colorAcento = Color(0xFF1976D2); colorFondoChip = Color.White; colorSeparador = Color(0xFFBBDEFB); colorIconoEdit = Color.Gray; colorBotonJugar = Color(0xFF18C1A8)
         }
         else -> {
-            colorFondo = Color(0xFF181818)
-            borderStroke = null
-            colorTitulo = Color.White
-            colorAcento = Color(0xFFFF6D00)
-            colorFondoChip = Color(0xFF2C2C2C)
-            colorSeparador = Color.DarkGray
-            colorIconoEdit = Color.LightGray
-            colorBotonJugar = Color(0xFFFF6D00)
+            colorFondo = Color(0xFF181818); borderStroke = null; colorTitulo = Color.White; colorAcento = Color(0xFFFF6D00); colorFondoChip = Color(0xFF2C2C2C); colorSeparador = Color.DarkGray; colorIconoEdit = Color.LightGray; colorBotonJugar = Color(0xFFFF6D00)
         }
     }
 
-    // 👇 NUEVO: Determinamos si este es el botón a destacar en el paso 3
     val esObjetivoTutorial = pasoTutorial == 3 && !coleccion.esDescargada && !coleccion.esColaboracion
 
     Card(
@@ -281,18 +265,16 @@ fun TarjetaColeccion(
                         Text(coleccion.nombre, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = colorTitulo)
 
                         if (coleccion.esColaboracion) {
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Rounded.Group, null, tint = colorAcento, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.Group, null, tint = colorAcento, modifier = Modifier.size(16.dp))
                         } else if (coleccion.esDescargada) {
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Rounded.CloudDownload, null, tint = colorAcento, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.CloudDownload, null, tint = colorAcento, modifier = Modifier.size(16.dp))
                         }
                     }
 
                     if (coleccion.esDescargada || coleccion.esColaboracion) {
                         coleccion.nombreCreador?.let { autor ->
                             Text(
-                                text = "Por @$autor",
+                                text = "${textos.por} @$autor",
                                 color = colorAcento.copy(alpha = 0.7f),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
@@ -302,29 +284,23 @@ fun TarjetaColeccion(
                             )
                         }
                     } else {
-                        Text("Por Mí", color = colorAcento.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(textos.porMi, color = colorAcento.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Text(coleccion.categoria.uppercase(), color = colorAcento, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                 }
                 Surface(color = colorFondoChip, border = borderStroke, shape = RoundedCornerShape(8.dp)) {
-                    Text(text = "$totalPalabras pal.", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = colorAcento)
+                    Text(text = "$totalPalabras ${textos.pal}", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = colorAcento)
                 }
             }
 
             if (mostrarAcciones) {
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = colorSeparador, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(12.dp)); HorizontalDivider(color = colorSeparador, thickness = 1.dp)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row {
                         IconButton(onClick = onEliminarClick) {
-                            Icon(
-                                imageVector = if (coleccion.esColaboracion) Icons.Rounded.ExitToApp else Icons.Rounded.Delete,
-                                contentDescription = null,
-                                tint = Color(0xFFFF3D00)
-                            )
+                            Icon(imageVector = if (coleccion.esColaboracion) Icons.Rounded.ExitToApp else Icons.Rounded.Delete, contentDescription = null, tint = Color(0xFFFF3D00))
                         }
-
                         if (!coleccion.esDescargada) {
                             IconButton(onClick = onEditarClick) {
                                 Icon(Icons.Rounded.Edit, contentDescription = null, tint = colorIconoEdit)
@@ -332,15 +308,13 @@ fun TarjetaColeccion(
                         }
                     }
 
-                    // 👇 CAMBIO: Aplicamos el color y texto especial si es el objetivo del tutorial
                     Button(
                         onClick = onJugarClick,
                         colors = ButtonDefaults.buttonColors(containerColor = if (esObjetivoTutorial) Color(0xFF18C1A8) else colorBotonJugar),
                         contentPadding = PaddingValues(horizontal = 16.dp)
                     ) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (esObjetivoTutorial) "¡PULSA AQUÍ!" else "JUGAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (esObjetivoTutorial) textos.pulsaAqui else textos.jugar, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

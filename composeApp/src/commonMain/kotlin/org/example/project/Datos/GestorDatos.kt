@@ -12,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 
-// 👇 NUEVO: Movido aquí desde App.kt para poder guardarlo
 @Serializable
 data class OpcionesJuego(
     val numImpostores: Int,
@@ -24,7 +23,6 @@ data class OpcionesJuego(
     val sinRepeticiones: Boolean = false
 )
 
-// 👇 NUEVO: Modelo del Checkpoint
 @Serializable
 data class CheckpointJuego(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -36,7 +34,6 @@ data class CheckpointJuego(
     val palabrasUsadas: List<String>
 )
 
-// 1. MODELOS DE DATOS
 @Serializable
 data class ColeccionGuardada(
     val nombre: String,
@@ -45,12 +42,11 @@ data class ColeccionGuardada(
     val idCreador: String? = null,
     val nombreCreador: String? = null,
     val likes: Int = 0,
-    val usuariosLikes: List<String> = emptyList(), // Registra quién dio Like
+    val usuariosLikes: List<String> = emptyList(),
     val esPublica: Boolean = false,
     val esDescargada: Boolean = false,
-    // CAMPOS PARA COLABORACIÓN
-    val colaboradores: List<String> = emptyList(), // UIDs de los usuarios invitados
-    val esColaboracion: Boolean = false // True si esta lista es de un amigo que te invitó
+    val colaboradores: List<String> = emptyList(),
+    val esColaboracion: Boolean = false
 )
 
 @Serializable
@@ -61,15 +57,14 @@ sealed class ElementoGuardado {
     data class Conjunto(val nombreConjunto: String, val palabras: List<Individual>) : ElementoGuardado()
 }
 
-// 2. EL GESTOR DE DATOS
 object GestorDatos {
     private val settings = Settings()
     private const val KEY_COLECCIONES = "mis_colecciones_v1"
     private const val KEY_JUGADORES = "mis_jugadores_v1"
     private const val KEY_CHECKPOINTS = "mis_checkpoints_v1"
-    private const val KEY_TUTORIAL = "paso_tutorial_v1" // 👇 NUEVO
+    private const val KEY_TUTORIAL = "paso_tutorial_v1"
+    private const val KEY_IDIOMA = "idioma_preferido_v1" // 👇 NUEVO: Clave para el idioma
 
-    // Evita que la app se rompa al leer datos antiguos a los que les faltan campos
     private val jsonConfig = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     val coleccionesGlobales = mutableStateListOf<ColeccionGuardada>()
@@ -80,8 +75,18 @@ object GestorDatos {
 
     val palabrasUsadasSesion = mutableStateListOf<String>()
 
-    // 👇 NUEVO: Estado global del tutorial interactivo (0 = inicio, 99 = terminado)
     var pasoTutorialActual by mutableStateOf(0)
+
+    // 👇 NUEVAS FUNCIONES PARA EL IDIOMA
+    fun cargarIdiomaGuardado(): String? {
+        val idioma = settings.getString(KEY_IDIOMA, "")
+        return if (idioma.isNotEmpty()) idioma else null
+    }
+
+    fun guardarIdiomaAjustes(codigo: String) {
+        settings.putString(KEY_IDIOMA, codigo)
+    }
+    // ---------------------------------
 
     fun cargarDatos() {
         val jsonColecciones = settings.getString(KEY_COLECCIONES, "")
@@ -111,7 +116,6 @@ object GestorDatos {
             } catch (e: Exception) { println("Error cargar checkpoints: ${e.message}") }
         }
 
-        // 👇 NUEVO: Cargar en qué paso se quedó el usuario
         pasoTutorialActual = settings.getInt(KEY_TUTORIAL, 0)
     }
 
@@ -126,7 +130,6 @@ object GestorDatos {
         settings.putString(KEY_CHECKPOINTS, jsonCheckpoints)
     }
 
-    // 👇 NUEVO: Funciones para controlar el avance del tutorial
     fun avanzarTutorial(nuevoPaso: Int) {
         pasoTutorialActual = nuevoPaso
         settings.putInt(KEY_TUTORIAL, nuevoPaso)
@@ -158,8 +161,8 @@ object GestorDatos {
     fun limpiarDatosLocales() {
         coleccionesGlobales.clear()
         jugadoresGlobales.clear()
-        checkpointsGlobales.clear() // 👇 AÑADIDO
-        checkpointActivoId = null     // 👇 AÑADIDO
+        checkpointsGlobales.clear()
+        checkpointActivoId = null
         guardarCambiosMemoria()
     }
 
@@ -168,7 +171,6 @@ object GestorDatos {
             GestorAuth.firestore.collection("usuarios").document(uid)
                 .update(mapOf("checkpoints" to checkpointsGlobales.toList()))
         } catch (e: Exception) {
-            // Si el campo no existe todavía, usamos set con merge
             GestorAuth.firestore.collection("usuarios").document(uid)
                 .set(mapOf("checkpoints" to checkpointsGlobales.toList()), merge = true)
         }
@@ -194,7 +196,6 @@ object GestorDatos {
                     jugadoresGlobales.addAll(jugadoresNube)
                 } catch (e: Exception) { }
 
-                // 👇 NUEVO: Descargar checkpoints
                 try {
                     val checkpointsNube = docUsuario.get<List<CheckpointJuego>>("checkpoints")
                     checkpointsGlobales.clear()
@@ -372,6 +373,4 @@ object GestorDatos {
             } catch (e: Exception) { println("Error actualizando al creador: ${e.message}") }
         }
     }
-
-
 }

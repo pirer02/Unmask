@@ -1,4 +1,5 @@
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,6 +31,15 @@ import org.example.project.Datos.*
 import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
 import androidx.compose.ui.text.style.TextOverflow
+import org.jetbrains.compose.resources.painterResource
+import unmask.composeapp.generated.resources.Res
+import unmask.composeapp.generated.resources.flag_de
+import unmask.composeapp.generated.resources.flag_en
+import unmask.composeapp.generated.resources.flag_es
+import unmask.composeapp.generated.resources.flag_fr
+import unmask.composeapp.generated.resources.flag_it
+import unmask.composeapp.generated.resources.flag_ja
+import unmask.composeapp.generated.resources.flag_zh
 
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,7 +58,11 @@ fun PantallaInicio(
     var urlFotoPerfil by remember { mutableStateOf<String?>(null) }
     var checkpointParaBorrar by remember { mutableStateOf<CheckpointJuego?>(null) }
 
-    // Obtenemos el paso del tutorial
+    // --- NUEVA LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    var mostrarMenuIdiomas by remember { mutableStateOf(false) }
+    // -------------------------------
+
     val pasoTutorial = GestorDatos.pasoTutorialActual
     val esTutorialActivo = pasoTutorial == 1
 
@@ -80,26 +94,62 @@ fun PantallaInicio(
         ) {
             Text("¡Juega con Unmask!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
-            IconButton(
-                onClick = { if (!esTutorialActivo) onIrAPerfil() }, // BLOQUEO TUTORIAL
-                modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFFFF4E6))
-            ) {
-                if (!urlFotoPerfil.isNullOrEmpty()) {
-                    if (urlFotoPerfil!!.startsWith("http")) {
-                        KamelImage(asyncPainterResource(urlFotoPerfil!!), null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                    } else {
-                        val bitmap = decodificarBase64Imagen(urlFotoPerfil!!)
-                        if (bitmap != null) {
-                            ComposeImage(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                        } else {
-                            Icon(Icons.Rounded.AccountCircle, null, modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
-                        }
+            // CONTENEDOR DEL SELECTOR DE IDIOMA Y PERFIL
+            Box {
+                IconButton(
+                    onClick = { mostrarMenuIdiomas = true },
+                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFF5F5F5))
+                ) {
+                    // Mostramos la bandera del idioma actual
+                    Image(
+                        painter = painterResource(obtenerDibujableBandera(idiomaActual.codigo)),
+                        contentDescription = idiomaActual.nombre,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                // MENÚ DESPLEGABLE DE IDIOMAS
+                DropdownMenu(
+                    expanded = mostrarMenuIdiomas,
+                    onDismissRequest = { mostrarMenuIdiomas = false },
+                    modifier = Modifier.background(Color.White)
+                ) {
+                    // Opción para ir al Perfil (Mantenemos tu funcionalidad original)
+                    DropdownMenuItem(
+                        text = { Text("Mi Perfil", fontWeight = FontWeight.Bold) },
+                        onClick = {
+                            mostrarMenuIdiomas = false
+                            if (!esTutorialActivo) onIrAPerfil()
+                        },
+                        leadingIcon = { Icon(Icons.Rounded.AccountCircle, null, tint = Color(0xFFFF6D00)) }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Lista de idiomas disponibles
+                    IdiomaSoportado.entries.forEach { idioma ->
+                        DropdownMenuItem(
+                            text = { Text(idioma.nombre) },
+                            onClick = {
+                                GestorIdiomas.cambiarIdioma(idioma)
+                                mostrarMenuIdiomas = false
+                            },
+                            leadingIcon = {
+                                Image(
+                                    painter = painterResource(obtenerDibujableBandera(idioma.codigo)),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp).clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        )
                     }
-                } else {
-                    Icon(Icons.Rounded.AccountCircle, null, modifier = Modifier.fillMaxSize(), tint = Color(0xFFFF6D00))
                 }
             }
         }
+
+        // --- EL RESTO DEL CÓDIGO SE MANTIENE IGUAL ---
 
         // TARJETA JUGADORES (BLOQUEADA EN TUTORIAL)
         Card(
@@ -201,13 +251,13 @@ fun PantallaInicio(
             }
         }
 
-        // LA ÚNICA TARJETA HABILITADA DURANTE EL TUTORIAL
+        // TARJETA CREAR LISTA
         Spacer(modifier = Modifier.height(8.dp))
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .clickable { onCrearLista() }, // SIEMPRE HABILITADA PARA AVANZAR
+                .clickable { onCrearLista() },
             colors = CardDefaults.cardColors(containerColor = if (esTutorialActivo) Color(0xFFE0F2F1) else Color(0xFFFFF4E6)),
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(2.dp, if (esTutorialActivo) Color(0xFF18C1A8) else Color(0xFFFFD8C2))
@@ -379,5 +429,20 @@ fun TarjetaCheckpoint(checkpoint: CheckpointJuego, coleccion: ColeccionGuardada,
                 Text("CONTINUAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+// Función auxiliar para obtener el recurso de la bandera según el código
+@OptIn(org.jetbrains.compose.resources.InternalResourceApi::class)
+fun obtenerDibujableBandera(codigo: String): org.jetbrains.compose.resources.DrawableResource {
+    return when (codigo) {
+        "es" -> Res.drawable.flag_es // <-- AQUÍ ESTABA EL FALLO, FALTABA ESTA LÍNEA
+        "en" -> Res.drawable.flag_en
+        "fr" -> Res.drawable.flag_fr
+        "it" -> Res.drawable.flag_it
+        "de" -> Res.drawable.flag_de
+        "zh" -> Res.drawable.flag_zh
+        "ja" -> Res.drawable.flag_ja
+        else -> Res.drawable.flag_en // Inglés por defecto si no encuentra el idioma
     }
 }
