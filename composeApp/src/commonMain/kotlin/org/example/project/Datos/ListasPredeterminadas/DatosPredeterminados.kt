@@ -1,7 +1,8 @@
+package org.example.project.Datos.ListasPredeterminadas
+
 import kotlinx.serialization.Serializable
 
-// --- MODELO COMPATIBLE PARA GUARDAR ---
-// (Ya no usamos mutableStateOf aquí porque son datos estáticos de lectura)
+// --- MODELO ---
 @Serializable
 data class ColeccionPredefinida(
     val nombre: String,
@@ -18,12 +19,9 @@ sealed class ElementoPredefinido {
     data class Conjunto(val nombreConjunto: String, val palabras: List<Individual>) : ElementoPredefinido()
 }
 
-// --- EL GRAN DICCIONARIO PREDETERMINADO ---
-// He generado 12 palabras por categoría para demostrar la estructura.
-// (El usuario puede añadir más hasta llegar a 50 si lo desea siguiendo este patrón).
-object DatosPredeterminados {
+// --- LISTA EN ESPAÑOL ---
+object DatosPredeterminadosES {
     val listasPredeterminadas = listOf(
-        // === 1. CATEGORÍA: OBJETO (75 ELEMENTOS) ===
         ColeccionPredefinida(
             nombre = "Objetos Cotidianos",
             categoria = "Objeto",
@@ -105,8 +103,6 @@ object DatosPredeterminados {
                 ElementoPredefinido.Individual("Pincel", "Óleo")
             )
         ),
-
-        // === 2. CATEGORÍA: LUGAR (75 ELEMENTOS) ===
         ColeccionPredefinida(
             nombre = "Lugares",
             categoria = "Lugar",
@@ -188,8 +184,6 @@ object DatosPredeterminados {
                 ElementoPredefinido.Individual("Laboratorio", "Tubos")
             )
         ),
-
-        // === 3. CATEGORÍA: ANIMAL (75 ELEMENTOS) ===
         ColeccionPredefinida(
             nombre = "Animales",
             categoria = "Animal",
@@ -271,8 +265,6 @@ object DatosPredeterminados {
                 ElementoPredefinido.Individual("Anguila", "Electricidad")
             )
         ),
-
-        // === 4. CATEGORÍA: COMIDA (75 ELEMENTOS) ===
         ColeccionPredefinida(
             nombre = "Gastronomía",
             categoria = "Comida",
@@ -347,15 +339,13 @@ object DatosPredeterminados {
                 ElementoPredefinido.Individual("Croissant", "Mantequilla"),
                 ElementoPredefinido.Individual("Baguette", "Francia"),
                 ElementoPredefinido.Individual("Pretzel", "Sal"),
-                ElementoPredefinido.Individual("Palomitas", "Maíz"),
+                ElementoPredefinido.Individual("Popomitas", "Maíz"),
                 ElementoPredefinido.Individual("Pipas", "Girasol"),
                 ElementoPredefinido.Individual("Almendras", "Frutos secos"),
                 ElementoPredefinido.Individual("Nueces", "Cáscara"),
                 ElementoPredefinido.Individual("Aceitunas", "Aperitivo")
             )
         ),
-
-        // === 5. CATEGORÍA: PROFESIÓN (75 ELEMENTOS) ===
         ColeccionPredefinida(
             nombre = "Oficios",
             categoria = "Profesión",
@@ -438,4 +428,20 @@ object DatosPredeterminados {
             )
         )
     )
+}
+
+// --- GESTOR DE IDIOMAS ---
+object DatosPredeterminados {
+    fun obtenerListasPredeterminadas(codigoIdioma: String): List<ColeccionPredefinida> {
+        return when (codigoIdioma.lowercase()) {
+            "en" -> DatosPredeterminadosEN.listasPredeterminadas
+            "fr" -> DatosPredeterminadosFR.listasPredeterminadas
+            "it" -> DatosPredeterminadosIT.listasPredeterminadas
+            "de" -> DatosPredeterminadosDE.listasPredeterminadas
+            "ja" -> DatosPredeterminadosJA.listasPredeterminadas
+            "zh" -> DatosPredeterminadosZH.listasPredeterminadas
+            "es" -> DatosPredeterminadosES.listasPredeterminadas
+            else -> DatosPredeterminadosES.listasPredeterminadas
+        }
+    }
 }

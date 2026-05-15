@@ -1,4 +1,3 @@
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,7 +24,6 @@ import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
@@ -34,6 +32,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.text.style.TextOverflow
 import org.example.project.Datos.*
+import org.example.project.Datos.TextosTraducidos.TextosExplorar
+import org.example.project.Datos.TextosTraducidos.obtenerTextosExplorar
 
 enum class VistaExplorar {
     FEED, PERFIL_USUARIO
@@ -53,9 +53,15 @@ fun PantallaExplorar(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosExplorar(idiomaActual)
+    // -------------------------
+
     var vistaActual by remember { mutableStateOf(VistaExplorar.FEED) }
 
     var textoBusqueda by remember { mutableStateOf("") }
+    // Mantenemos los valores internos fijos para no romper tu lógica
     var tipoBusqueda by remember { mutableStateOf("Listas") }
 
     var resultadosBusqueda by remember { mutableStateOf<List<PerfilSocial>>(emptyList()) }
@@ -75,7 +81,6 @@ fun PantallaExplorar(
     var coleccionViendoInfo by remember { mutableStateOf<ColeccionGuardada?>(null) }
     var coleccionParaBorrarDescarga by remember { mutableStateOf<ColeccionGuardada?>(null) }
 
-    // 👇 NUEVO: Obtenemos el paso del tutorial actual
     val pasoTutorial = GestorDatos.pasoTutorialActual
 
     LaunchedEffect(usuario, vistaActual) {
@@ -121,9 +126,8 @@ fun PantallaExplorar(
         }
     }
 
-    // 👇 NUEVO: Bloqueamos el botón físico de retroceso de Android en el paso 5
     androidx.activity.compose.BackHandler(enabled = pasoTutorial == 5) {
-        scope.launch { snackbarHostState.showSnackbar("¡Pulsa FINALIZAR en el mensaje para terminar el tutorial!") }
+        scope.launch { snackbarHostState.showSnackbar(textos.msgAvisoTutorialVolver) }
     }
 
     Scaffold(
@@ -140,9 +144,8 @@ fun PantallaExplorar(
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 IconButton(onClick = {
-                    // 👇 NUEVO: Bloqueo de la flecha de volver
                     if (pasoTutorial == 5) {
-                        scope.launch { snackbarHostState.showSnackbar("¡Pulsa FINALIZAR en el mensaje para terminar el tutorial!") }
+                        scope.launch { snackbarHostState.showSnackbar(textos.msgAvisoTutorialVolver) }
                     } else if (vistaActual == VistaExplorar.PERFIL_USUARIO) {
                         vistaActual = VistaExplorar.FEED
                     } else {
@@ -152,7 +155,7 @@ fun PantallaExplorar(
                     Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver", tint = Color(0xFF1A1A1A))
                 }
                 Text(
-                    text = if (vistaActual == VistaExplorar.PERFIL_USUARIO) "Perfil de @${perfilSeleccionado?.username ?: ""}" else "Explorar",
+                    text = if (vistaActual == VistaExplorar.PERFIL_USUARIO) "${textos.tituloPerfil} @${perfilSeleccionado?.username ?: ""}" else textos.tituloExplorar,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1A1A1A)
@@ -166,18 +169,17 @@ fun PantallaExplorar(
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                             Icon(Icons.Rounded.Public, null, modifier = Modifier.size(80.dp), tint = Color.LightGray)
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Explora la comunidad", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text(textos.tituloExploraComunidad, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                             Text(
-                                "Inicia sesión para buscar amigos, descargar listas y jugar las creaciones de otros investigadores.",
+                                textos.descExploraComunidad,
                                 textAlign = TextAlign.Center,
                                 color = Color.Gray
                             )
                             Spacer(modifier = Modifier.height(24.dp))
                             Button(
                                 onClick = {
-                                    // 👇 NUEVO: Impedir ir al perfil antes de acabar el tutorial
                                     if (pasoTutorial == 5) {
-                                        scope.launch { snackbarHostState.showSnackbar("¡Termina el tutorial primero para iniciar sesión!") }
+                                        scope.launch { snackbarHostState.showSnackbar(textos.msgAvisoTutorialPerfil) }
                                     } else {
                                         onIrAPerfilLogin()
                                     }
@@ -186,7 +188,7 @@ fun PantallaExplorar(
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth().height(56.dp)
                             ) {
-                                Text("IR A MI PERFIL", fontWeight = FontWeight.Bold)
+                                Text(textos.btnIrPerfil, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -199,7 +201,7 @@ fun PantallaExplorar(
                                     FilterChip(
                                         selected = tipoBusqueda == "Listas",
                                         onClick = { tipoBusqueda = "Listas"; textoBusqueda = "" },
-                                        label = { Text("Listas", fontWeight = FontWeight.Bold) },
+                                        label = { Text(textos.filtroListas, fontWeight = FontWeight.Bold) },
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = Color(0xFF18C1A8),
                                             selectedLabelColor = Color.White
@@ -210,7 +212,7 @@ fun PantallaExplorar(
                                     FilterChip(
                                         selected = tipoBusqueda == "Usuarios",
                                         onClick = { tipoBusqueda = "Usuarios"; textoBusqueda = "" },
-                                        label = { Text("Usuarios", fontWeight = FontWeight.Bold) },
+                                        label = { Text(textos.filtroUsuarios, fontWeight = FontWeight.Bold) },
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = Color(0xFF18C1A8),
                                             selectedLabelColor = Color.White
@@ -223,7 +225,7 @@ fun PantallaExplorar(
                                 OutlinedTextField(
                                     value = textoBusqueda,
                                     onValueChange = { textoBusqueda = it },
-                                    placeholder = { Text(if (tipoBusqueda == "Listas") "Buscar listas..." else "Buscar investigadores...") },
+                                    placeholder = { Text(if (tipoBusqueda == "Listas") textos.buscarListas else textos.buscarUsuarios) },
                                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
                                     trailingIcon = {
                                         if (textoBusqueda.isNotEmpty()) {
@@ -243,7 +245,7 @@ fun PantallaExplorar(
                                 if (tipoBusqueda == "Usuarios") {
                                     if (textoBusqueda.isEmpty()) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                                            Text("Escribe un nombre para buscar investigadores.", color = Color.Gray, modifier = Modifier.padding(top = 32.dp))
+                                            Text(textos.escribeNombreBuscar, color = Color.Gray, modifier = Modifier.padding(top = 32.dp))
                                         }
                                     } else {
                                         if (buscandoUsuarios) {
@@ -252,13 +254,14 @@ fun PantallaExplorar(
                                             }
                                         } else if (resultadosBusqueda.isEmpty()) {
                                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                Text("No se encontraron investigadores", color = Color.Gray)
+                                                Text(textos.noInvestigadores, color = Color.Gray)
                                             }
                                         } else {
                                             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                                                 items(resultadosBusqueda) { perfil ->
                                                     TarjetaUsuarioBuscado(
                                                         perfil = perfil,
+                                                        textos = textos,
                                                         onClick = { abrirPerfil(perfil.uid) }
                                                     )
                                                     Spacer(modifier = Modifier.height(8.dp))
@@ -273,12 +276,16 @@ fun PantallaExplorar(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             modifier = Modifier.padding(bottom = 8.dp)
                                         ) {
-                                            val filtros = listOf("Nuevas", "Populares", "Más palabras")
-                                            items(filtros) { filtro ->
+                                            val filtrosInternos = listOf("Nuevas", "Populares", "Más palabras")
+                                            val filtrosUi = listOf(textos.filtroNuevas, textos.filtroPopulares, textos.filtroMasPalabras)
+
+                                            items(filtrosInternos.size) { index ->
+                                                val filtroI = filtrosInternos[index]
+                                                val filtroU = filtrosUi[index]
                                                 FilterChip(
-                                                    selected = filtroSeleccionado == filtro,
-                                                    onClick = { filtroSeleccionado = filtro },
-                                                    label = { Text(filtro) },
+                                                    selected = filtroSeleccionado == filtroI,
+                                                    onClick = { filtroSeleccionado = filtroI },
+                                                    label = { Text(filtroU) },
                                                     colors = FilterChipDefaults.filterChipColors(
                                                         selectedContainerColor = Color(0xFFFF6D00),
                                                         selectedLabelColor = Color.White
@@ -296,13 +303,13 @@ fun PantallaExplorar(
                                                             cargandoFeed = false
                                                         }
                                                     },
-                                                    label = { Text("Ver todo") },
+                                                    label = { Text(textos.verTodo) },
                                                     leadingIcon = { Icon(Icons.Rounded.AllInclusive, null, modifier = Modifier.size(16.dp)) }
                                                 )
                                             }
                                         }
                                     } else {
-                                        Text("Resultados para '$textoBusqueda'", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                                        Text("${textos.resultadosPara} '$textoBusqueda'", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                                     }
 
                                     if (cargandoFeed) {
@@ -311,7 +318,7 @@ fun PantallaExplorar(
                                         }
                                     } else if (feedGlobal.isEmpty()) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text("No hay listas públicas en la comunidad aún.", color = Color.Gray)
+                                            Text(textos.noListasComunidad, color = Color.Gray)
                                         }
                                     } else {
                                         val feedMostrado = if (textoBusqueda.isNotEmpty()) {
@@ -330,7 +337,7 @@ fun PantallaExplorar(
 
                                         if (feedMostrado.isEmpty() && textoBusqueda.isNotEmpty()) {
                                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                Text("No hay listas que coincidan con tu búsqueda.", color = Color.Gray)
+                                                Text(textos.noListasBusqueda, color = Color.Gray)
                                             }
                                         } else {
                                             LazyVerticalGrid(
@@ -345,6 +352,7 @@ fun PantallaExplorar(
                                                         coleccion = coleccion,
                                                         autor = coleccion.nombreCreador ?: "Anónimo",
                                                         miUid = usuario?.uid,
+                                                        textos = textos,
                                                         onAutorClick = {
                                                             coleccion.idCreador?.let { uid -> abrirPerfil(uid) }
                                                         },
@@ -360,7 +368,7 @@ fun PantallaExplorar(
                                                                     usuario?.uid?.let { miUid ->
                                                                         GestorDatos.subirColeccionNube(miUid, copiaParaMi)
                                                                     }
-                                                                    snackbarHostState.showSnackbar("Guardada en tu biblioteca online")
+                                                                    snackbarHostState.showSnackbar(textos.msgGuardada)
                                                                 }
                                                             }
                                                         },
@@ -424,7 +432,7 @@ fun PantallaExplorar(
                                                     Spacer(modifier = Modifier.width(16.dp))
                                                     Column {
                                                         Text("@${perfilSeleccionado!!.username}", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                                                        Text("${listasPerfilAjeno.size} listas públicas", color = Color.Gray, fontSize = 14.sp)
+                                                        Text("${listasPerfilAjeno.size} ${textos.listasPublicas}", color = Color.Gray, fontSize = 14.sp)
                                                     }
                                                 }
                                             }
@@ -438,11 +446,11 @@ fun PantallaExplorar(
                                                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.weight(1f)) {
                                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                         Text("$contadorSeguidores", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                                        Text("Seguidores", color = Color.Gray, fontSize = 12.sp)
+                                                        Text(textos.seguidores, color = Color.Gray, fontSize = 12.sp)
                                                     }
                                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                         Text("${perfilSeleccionado!!.seguidos.size}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                                        Text("Siguiendo", color = Color.Gray, fontSize = 12.sp)
+                                                        Text(textos.siguiendo, color = Color.Gray, fontSize = 12.sp)
                                                     }
                                                 }
 
@@ -458,7 +466,7 @@ fun PantallaExplorar(
                                                                 if (!exito) {
                                                                     loSigo = !nuevoEstado
                                                                     contadorSeguidores += if (!nuevoEstado) 1 else -1
-                                                                    snackbarHostState.showSnackbar("Error al actualizar seguimiento")
+                                                                    snackbarHostState.showSnackbar(textos.msgErrorSeguir)
                                                                 }
                                                             }
                                                         }
@@ -471,7 +479,7 @@ fun PantallaExplorar(
                                                     shape = RoundedCornerShape(8.dp),
                                                     modifier = Modifier.height(40.dp)
                                                 ) {
-                                                    Text(if (loSigo) "Siguiendo" else "Seguir", fontWeight = FontWeight.Bold)
+                                                    Text(if (loSigo) textos.btnSiguiendo else textos.btnSeguir, fontWeight = FontWeight.Bold)
                                                 }
                                             }
 
@@ -499,7 +507,7 @@ fun PantallaExplorar(
 
                                     if (listasPerfilAjeno.isEmpty()) {
                                         Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
-                                            Text("Este usuario no tiene listas públicas.", color = Color.Gray)
+                                            Text(textos.sinListasPublicas, color = Color.Gray)
                                         }
                                     } else {
                                         LazyVerticalGrid(
@@ -514,6 +522,7 @@ fun PantallaExplorar(
                                                     coleccion = coleccion,
                                                     autor = perfilSeleccionado!!.username,
                                                     miUid = usuario?.uid,
+                                                    textos = textos,
                                                     onAutorClick = null,
                                                     onJugar = { onJugarColeccion(coleccion) },
                                                     onDescargar = {
@@ -527,7 +536,7 @@ fun PantallaExplorar(
                                                                 usuario?.uid?.let { miUid ->
                                                                     GestorDatos.subirColeccionNube(miUid, copiaParaMi)
                                                                 }
-                                                                snackbarHostState.showSnackbar("Guardada en tu biblioteca online")
+                                                                snackbarHostState.showSnackbar(textos.msgGuardada)
                                                             }
                                                         }
                                                     },
@@ -555,6 +564,7 @@ fun PantallaExplorar(
     if (coleccionViendoInfo != null) {
         DialogoInfoExplorar(
             coleccion = coleccionViendoInfo!!,
+            textos = textos,
             onCerrar = { coleccionViendoInfo = null }
         )
     }
@@ -562,8 +572,8 @@ fun PantallaExplorar(
     if (coleccionParaBorrarDescarga != null) {
         AlertDialog(
             onDismissRequest = { coleccionParaBorrarDescarga = null },
-            title = { Text("¿Eliminar descarga?") },
-            text = { Text("Ya tienes la lista '${coleccionParaBorrarDescarga?.nombre}' guardada en tu biblioteca. ¿Deseas eliminarla?") },
+            title = { Text(textos.dialogoEliminarDescargaTitulo) },
+            text = { Text("${textos.dialogoEliminarDescargaDesc1}${coleccionParaBorrarDescarga?.nombre}${textos.dialogoEliminarDescargaDesc2}") },
             confirmButton = {
                 TextButton(onClick = {
                     coleccionParaBorrarDescarga?.let { col ->
@@ -579,21 +589,21 @@ fun PantallaExplorar(
                                     } catch (e: Exception) {}
                                 }
                             }
-                            scope.launch { snackbarHostState.showSnackbar("Eliminada de tu biblioteca") }
+                            scope.launch { snackbarHostState.showSnackbar(textos.msgEliminada) }
                         }
                     }
                     coleccionParaBorrarDescarga = null
-                }) { Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) }
+                }) { Text(textos.btnEliminar, color = Color.Red, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { coleccionParaBorrarDescarga = null }) { Text("CANCELAR", color = Color.Gray) }
+                TextButton(onClick = { coleccionParaBorrarDescarga = null }) { Text(textos.btnCancelar, color = Color.Gray) }
             }
         )
     }
 }
 
 @Composable
-fun DialogoInfoExplorar(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
+fun DialogoInfoExplorar(coleccion: ColeccionGuardada, textos: TextosExplorar, onCerrar: () -> Unit) {
     var textoBusquedaPalabra by remember { mutableStateOf("") }
     val todasLasPalabras = remember(coleccion) {
         coleccion.elementos.flatMap { elemento ->
@@ -625,7 +635,7 @@ fun DialogoInfoExplorar(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
                 OutlinedTextField(
                     value = textoBusquedaPalabra,
                     onValueChange = { textoBusquedaPalabra = it },
-                    placeholder = { Text("Buscar palabra en esta lista...") },
+                    placeholder = { Text(textos.buscarPalabraLista) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(50),
@@ -633,7 +643,7 @@ fun DialogoInfoExplorar(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("${todasLasPalabras.size} palabras totales", color = Color.Gray, fontSize = 13.sp)
+                Text("${todasLasPalabras.size} ${textos.palabrasTotales}", color = Color.Gray, fontSize = 13.sp)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -654,7 +664,7 @@ fun DialogoInfoExplorar(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
 }
 
 @Composable
-fun TarjetaUsuarioBuscado(perfil: PerfilSocial, onClick: () -> Unit) {
+fun TarjetaUsuarioBuscado(perfil: PerfilSocial, textos: TextosExplorar, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -681,7 +691,7 @@ fun TarjetaUsuarioBuscado(perfil: PerfilSocial, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text("@${perfil.username}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("${perfil.seguidores.size} seguidores", fontSize = 12.sp, color = Color.Gray)
+                Text("${perfil.seguidores.size} ${textos.seguidores.lowercase()}", fontSize = 12.sp, color = Color.Gray)
             }
             Icon(Icons.Rounded.ChevronRight, null, tint = Color.LightGray)
         }
@@ -693,6 +703,7 @@ fun TarjetaComunidad(
     coleccion: ColeccionGuardada,
     autor: String,
     miUid: String?,
+    textos: TextosExplorar,
     onAutorClick: (() -> Unit)?,
     onJugar: () -> Unit,
     onDescargar: () -> Unit,
@@ -755,7 +766,7 @@ fun TarjetaComunidad(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Por @$autor",
+                        text = "${textos.por} @$autor",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFF6D00),
@@ -765,7 +776,7 @@ fun TarjetaComunidad(
                             if (onAutorClick != null) it.clickable { onAutorClick() } else it
                         }
                     )
-                    Text("$totalPalabras pal.", fontSize = 10.sp, color = Color.Gray, maxLines = 1)
+                    Text("$totalPalabras ${textos.pal}", fontSize = 10.sp, color = Color.Gray, maxLines = 1)
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -835,7 +846,7 @@ fun TarjetaComunidad(
                 ) {
                     Icon(Icons.Rounded.PlayArrow, contentDescription = "Jugar", modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(2.dp))
-                    Text("JUGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(textos.btnJugar, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

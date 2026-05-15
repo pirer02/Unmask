@@ -1,4 +1,6 @@
-package org.example.project.Datos
+package org.example.project.Datos.TextosTraducidos
+
+import org.example.project.Datos.IdiomaSoportado
 
 data class TextosBiblioteca(
     val titulo: String,

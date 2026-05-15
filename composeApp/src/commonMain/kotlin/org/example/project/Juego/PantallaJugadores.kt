@@ -1,4 +1,4 @@
-import androidx.activity.compose.BackHandler // 👇 Añadido para controlar el botón de atrás
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.example.project.Datos.*
+import org.example.project.Datos.TextosTraducidos.obtenerTextosJugadores
 
-// Herramienta de capitalización para nombres
 fun String.capitalizarNombre(): String {
     if (this.isBlank()) return this
     return this.trim().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
@@ -30,10 +30,14 @@ fun PantallaJugadores(
     jugadores: MutableList<String>,
     onVolver: () -> Unit
 ) {
-    // 👇 NUEVO: Manejador del botón físico de retroceso de Android
     BackHandler {
         onVolver()
     }
+
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosJugadores(idiomaActual)
+    // -------------------------
 
     var nuevoJugador by remember { mutableStateOf("") }
     var errorTexto by remember { mutableStateOf("") }
@@ -51,7 +55,7 @@ fun PantallaJugadores(
         // CABECERA
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver") }
-            Text("Jugadores", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(textos.tituloJugadores, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.weight(1f))
             Text("${jugadores.size}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF6D00))
 
@@ -71,7 +75,7 @@ fun PantallaJugadores(
                         nuevoJugador = it
                         errorTexto = ""
                     },
-                    placeholder = { Text("Nombre del jugador...") },
+                    placeholder = { Text(textos.placeholderNombre) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     isError = errorTexto.isNotEmpty(),
@@ -83,9 +87,9 @@ fun PantallaJugadores(
                     onClick = {
                         val nombreLimpio = nuevoJugador.trim()
                         if (nombreLimpio.isBlank()) {
-                            errorTexto = "El nombre no puede estar vacío"
+                            errorTexto = textos.errorVacio
                         } else if (jugadores.any { it.equals(nombreLimpio, ignoreCase = true) }) {
-                            errorTexto = "¡Este nombre ya existe!"
+                            errorTexto = textos.errorExiste
                         } else {
                             jugadores.add(nombreLimpio.capitalizarNombre())
                             GestorDatos.guardarCambiosMemoria()
@@ -119,7 +123,7 @@ fun PantallaJugadores(
         // LISTA DE JUGADORES
         if (jugadores.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
-                Text("Añade al menos 3 jugadores", color = Color.Gray)
+                Text(textos.anadeMinimo, color = Color.Gray)
             }
         } else {
             LazyColumn(
@@ -195,8 +199,8 @@ fun PantallaJugadores(
     if (mostrarAvisoBorrarTodos) {
         AlertDialog(
             onDismissRequest = { mostrarAvisoBorrarTodos = false },
-            title = { Text("¿Borrar todos?") },
-            text = { Text("Se vaciará la lista de jugadores.") },
+            title = { Text(textos.dialogoBorrarTitulo) },
+            text = { Text(textos.dialogoBorrarDesc) },
             confirmButton = {
                 TextButton(onClick = {
                     jugadores.clear()
@@ -205,10 +209,10 @@ fun PantallaJugadores(
                     usuarioLogueado?.let { user -> scope.launch { GestorDatos.subirJugadoresNube(user.uid) } }
 
                     mostrarAvisoBorrarTodos = false
-                }) { Text("VACIAR", color = Color.Red) }
+                }) { Text(textos.btnVaciar, color = Color.Red) }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarAvisoBorrarTodos = false }) { Text("CANCELAR", color = Color.Gray) }
+                TextButton(onClick = { mostrarAvisoBorrarTodos = false }) { Text(textos.btnCancelar, color = Color.Gray) }
             }
         )
     }

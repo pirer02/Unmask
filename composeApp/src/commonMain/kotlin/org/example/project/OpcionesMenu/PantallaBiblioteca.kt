@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.example.project.Datos.*
+import org.example.project.Datos.TextosTraducidos.TextosBiblioteca
+import org.example.project.Datos.TextosTraducidos.obtenerTextosBiblioteca
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

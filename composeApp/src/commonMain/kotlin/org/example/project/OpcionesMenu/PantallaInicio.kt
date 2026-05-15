@@ -31,6 +31,9 @@ import org.example.project.Datos.*
 import androidx.compose.foundation.Image as ComposeImage
 import org.example.project.decodificarBase64Imagen
 import androidx.compose.ui.text.style.TextOverflow
+import org.example.project.Datos.ListasPredeterminadas.DatosPredeterminados
+import org.example.project.Datos.TextosTraducidos.TextosInicio
+import org.example.project.Datos.TextosTraducidos.obtenerTextosInicio
 import org.jetbrains.compose.resources.painterResource
 import unmask.composeapp.generated.resources.Res
 import unmask.composeapp.generated.resources.flag_de
@@ -58,10 +61,11 @@ fun PantallaInicio(
     var urlFotoPerfil by remember { mutableStateOf<String?>(null) }
     var checkpointParaBorrar by remember { mutableStateOf<CheckpointJuego?>(null) }
 
-    // --- NUEVA LÓGICA DE IDIOMAS ---
+    // --- LÓGICA DE IDIOMAS CON TEXTOS DINÁMICOS ---
     val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosInicio(idiomaActual)
     var mostrarMenuIdiomas by remember { mutableStateOf(false) }
-    // -------------------------------
+    // ----------------------------------------------
 
     val pasoTutorial = GestorDatos.pasoTutorialActual
     val esTutorialActivo = pasoTutorial == 1
@@ -82,7 +86,8 @@ fun PantallaInicio(
     val descargasRecientes = misDescargas.takeLast(3).reversed()
     val misColaboraciones = GestorDatos.coleccionesGlobales.filter { it.esColaboracion }
     val colaboracionesRecientes = misColaboraciones.takeLast(3).reversed()
-    val predeterminadas = DatosPredeterminados.listasPredeterminadas
+
+    val predeterminadas = DatosPredeterminados.obtenerListasPredeterminadas(idiomaActual.codigo)
 
     var coleccionViendoInfo by remember { mutableStateOf<ColeccionGuardada?>(null) }
 
@@ -92,15 +97,13 @@ fun PantallaInicio(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("¡Juega con Unmask!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Text(textos.tituloJuega, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
-            // CONTENEDOR DEL SELECTOR DE IDIOMA Y PERFIL
             Box {
                 IconButton(
                     onClick = { mostrarMenuIdiomas = true },
                     modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFF5F5F5))
                 ) {
-                    // Mostramos la bandera del idioma actual
                     Image(
                         painter = painterResource(obtenerDibujableBandera(idiomaActual.codigo)),
                         contentDescription = idiomaActual.nombre,
@@ -109,25 +112,11 @@ fun PantallaInicio(
                     )
                 }
 
-                // MENÚ DESPLEGABLE DE IDIOMAS
                 DropdownMenu(
                     expanded = mostrarMenuIdiomas,
                     onDismissRequest = { mostrarMenuIdiomas = false },
                     modifier = Modifier.background(Color.White)
                 ) {
-                    // Opción para ir al Perfil (Mantenemos tu funcionalidad original)
-                    DropdownMenuItem(
-                        text = { Text("Mi Perfil", fontWeight = FontWeight.Bold) },
-                        onClick = {
-                            mostrarMenuIdiomas = false
-                            if (!esTutorialActivo) onIrAPerfil()
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.AccountCircle, null, tint = Color(0xFFFF6D00)) }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    // Lista de idiomas disponibles
                     IdiomaSoportado.entries.forEach { idioma ->
                         DropdownMenuItem(
                             text = { Text(idioma.nombre) },
@@ -149,9 +138,6 @@ fun PantallaInicio(
             }
         }
 
-        // --- EL RESTO DEL CÓDIGO SE MANTIENE IGUAL ---
-
-        // TARJETA JUGADORES (BLOQUEADA EN TUTORIAL)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -164,17 +150,16 @@ fun PantallaInicio(
                 Icon(Icons.Rounded.Group, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text("Los jugadores de hoy", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
-                    Text("Configura tu grupo antes de jugar", color = Color.White, fontSize = 12.sp)
+                    Text(textos.tituloJugadores, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
+                    Text(textos.descJugadores, color = Color.White, fontSize = 12.sp)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // CHECKPOINTS (BLOQUEADOS EN TUTORIAL)
         if (misCheckpoints.isNotEmpty()) {
-            SeccionTitulo(titulo = "Partidas en Pausa", icono = Icons.Rounded.SaveAs)
+            SeccionTitulo(titulo = textos.tituloPausa, icono = Icons.Rounded.SaveAs)
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
                 items(misCheckpoints) { checkpoint ->
@@ -183,6 +168,7 @@ fun PantallaInicio(
                         TarjetaCheckpoint(
                             checkpoint = checkpoint,
                             coleccion = coleccionAsociada,
+                            textos = textos,
                             onJugarClick = { if(!esTutorialActivo) onJugarCheckpoint(coleccionAsociada, checkpoint) },
                             onBorrarClick = { if(!esTutorialActivo) checkpointParaBorrar = checkpoint }
                         )
@@ -193,14 +179,13 @@ fun PantallaInicio(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // TUS CREACIONES (BLOQUEADAS EN TUTORIAL)
         if (recientes.isNotEmpty()) {
-            SeccionTitulo(titulo = "Creaciones Recientes", icono = Icons.Rounded.Stars)
+            SeccionTitulo(titulo = textos.tituloRecientes, icono = Icons.Rounded.Stars)
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
                 items(recientes) { coleccion ->
                     TarjetaColeccionInicio(
-                        coleccion = coleccion, esPredeterminada = false,
+                        coleccion = coleccion, esPredeterminada = false, textos = textos,
                         onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -209,14 +194,13 @@ fun PantallaInicio(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // PREDETERMINADAS (BLOQUEADAS EN TUTORIAL)
-        SeccionTitulo(titulo = "Colecciones Predeterminadas", icono = Icons.Rounded.Info)
+        SeccionTitulo(titulo = textos.tituloPredeterminadas, icono = Icons.Rounded.Info)
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
             items(predeterminadas) { predefinida ->
                 val coleccionGuardada = GestorDatos.convertirPredefinidaAGuardada(predefinida)
                 TarjetaColeccionInicio(
-                    coleccion = coleccionGuardada, esPredeterminada = true,
+                    coleccion = coleccionGuardada, esPredeterminada = true, textos = textos,
                     onJugarClick = { if(!esTutorialActivo) onJugar(coleccionGuardada) },
                     onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccionGuardada }
                 )
@@ -225,25 +209,24 @@ fun PantallaInicio(
         }
         Spacer(modifier = Modifier.height(24.dp))
 
-        // COLABORACIONES Y DESCARGAS (BLOQUEADAS EN TUTORIAL)
         if (colaboracionesRecientes.isNotEmpty() || descargasRecientes.isNotEmpty()) {
             if (colaboracionesRecientes.isNotEmpty()) {
-                SeccionTitulo(titulo = "Colaboraciones", icono = Icons.Rounded.Handshake)
+                SeccionTitulo(titulo = textos.tituloColaboraciones, icono = Icons.Rounded.Handshake)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
                     items(colaboracionesRecientes) { coleccion ->
-                        TarjetaColeccionInicio(coleccion = coleccion, esPredeterminada = false, onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }, onAutorClick = { if(!esTutorialActivo) coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } })
+                        TarjetaColeccionInicio(coleccion = coleccion, esPredeterminada = false, textos = textos, onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }, onAutorClick = { if(!esTutorialActivo) coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } })
                         Spacer(modifier = Modifier.width(12.dp))
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
             if (descargasRecientes.isNotEmpty()) {
-                SeccionTitulo(titulo = "Listas Descargadas", icono = Icons.Rounded.CloudDownload)
+                SeccionTitulo(titulo = textos.tituloDescargas, icono = Icons.Rounded.CloudDownload)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), modifier = Modifier.alpha(if(esTutorialActivo) 0.5f else 1f)) {
                     items(descargasRecientes) { coleccion ->
-                        TarjetaColeccionInicio(coleccion = coleccion, esPredeterminada = false, onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }, onAutorClick = { if(!esTutorialActivo) coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } })
+                        TarjetaColeccionInicio(coleccion = coleccion, esPredeterminada = false, textos = textos, onJugarClick = { if(!esTutorialActivo) onJugar(coleccion) }, onInfoClick = { if(!esTutorialActivo) coleccionViendoInfo = coleccion }, onAutorClick = { if(!esTutorialActivo) coleccion.idCreador?.let { uid -> onVerPerfilAjeno(uid) } })
                         Spacer(modifier = Modifier.width(12.dp))
                     }
                 }
@@ -251,7 +234,6 @@ fun PantallaInicio(
             }
         }
 
-        // TARJETA CREAR LISTA
         Spacer(modifier = Modifier.height(8.dp))
         Card(
             modifier = Modifier
@@ -265,9 +247,9 @@ fun PantallaInicio(
             Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(if (esTutorialActivo) Icons.Rounded.AdsClick else Icons.Rounded.EditNote, contentDescription = null, tint = if (esTutorialActivo) Color(0xFF18C1A8) else Color(0xFFFF6D00), modifier = Modifier.size(48.dp))
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(if (esTutorialActivo) "¡PULSA AQUÍ PARA EMPEZAR!" else "Crea tu propia lista", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1A1A1A))
+                Text(if (esTutorialActivo) textos.pulsaEmpezar else textos.creaLista, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1A1A1A))
                 Text(
-                    "Añade tus palabras favoritas y compártelas con la comunidad.",
+                    textos.descCreaLista,
                     textAlign = TextAlign.Center, fontSize = 14.sp, color = Color.Gray,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
@@ -276,7 +258,7 @@ fun PantallaInicio(
                     colors = ButtonDefaults.buttonColors(containerColor = if (esTutorialActivo) Color(0xFF18C1A8) else Color(0xFFFF6D00)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(if (esTutorialActivo) "CREAR LISTA" else "CREAR AHORA", fontWeight = FontWeight.Bold)
+                    Text(if (esTutorialActivo) textos.btnCrearLista else textos.btnCrearAhora, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -284,9 +266,15 @@ fun PantallaInicio(
         Spacer(modifier = Modifier.height(100.dp))
     }
 
-    if (coleccionViendoInfo != null) DialogoInfoColeccion(coleccion = coleccionViendoInfo!!, onCerrar = { coleccionViendoInfo = null })
+    if (coleccionViendoInfo != null) DialogoInfoColeccion(coleccion = coleccionViendoInfo!!, textos = textos, onCerrar = { coleccionViendoInfo = null })
     if (checkpointParaBorrar != null) {
-        AlertDialog(onDismissRequest = { checkpointParaBorrar = null }, title = { Text("¿Finalizar y borrar?") }, text = { Text("¿Seguro que quieres borrar '${checkpointParaBorrar!!.nombre}'?") }, confirmButton = { TextButton(onClick = { GestorDatos.checkpointsGlobales.removeAll { it.id == checkpointParaBorrar!!.id }; GestorDatos.guardarCambiosMemoria(); checkpointParaBorrar = null }) { Text("BORRAR", color = Color.Red, fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { checkpointParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) } })
+        AlertDialog(
+            onDismissRequest = { checkpointParaBorrar = null },
+            title = { Text(textos.dialogoBorrarTitulo) },
+            text = { Text("${textos.dialogoBorrarDesc1} '${checkpointParaBorrar!!.nombre}'${textos.dialogoBorrarDesc2}") },
+            confirmButton = { TextButton(onClick = { GestorDatos.checkpointsGlobales.removeAll { it.id == checkpointParaBorrar!!.id }; GestorDatos.guardarCambiosMemoria(); checkpointParaBorrar = null }) { Text(textos.btnBorrar, color = Color.Red, fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = { checkpointParaBorrar = null }) { Text(textos.btnCancelar, color = Color.Gray) } }
+        )
     }
 }
 
@@ -299,7 +287,7 @@ fun SeccionTitulo(titulo: String, icono: androidx.compose.ui.graphics.vector.Ima
 }
 
 @Composable
-fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boolean, onJugarClick: () -> Unit, onInfoClick: () -> Unit, onAutorClick: (() -> Unit)? = null) {
+fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boolean, textos: TextosInicio, onJugarClick: () -> Unit, onInfoClick: () -> Unit, onAutorClick: (() -> Unit)? = null) {
     val totalPalabras = coleccion.elementos.sumOf { if (it is ElementoGuardado.Individual) 1 else (it as ElementoGuardado.Conjunto).palabras.size }
     var urlFoto by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(coleccion.idCreador) { if (!esPredeterminada && coleccion.idCreador != null) { val perfil = GestorAuth.obtenerPerfilSocial(coleccion.idCreador); urlFoto = perfil?.fotoPerfil } }
@@ -335,9 +323,9 @@ fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boole
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    val textoAutor = when { esPredeterminada -> "Unmask Oficial"; coleccion.esDescargada || coleccion.esColaboracion -> "Por @${coleccion.nombreCreador ?: "investigador"}"; else -> "Por Mí" }
-                    Text(text = textoAutor, fontSize = 11.sp, fontWeight = if (textoAutor == "Por Mí") FontWeight.Bold else FontWeight.Medium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.let { if ((coleccion.esDescargada || coleccion.esColaboracion) && onAutorClick != null && !esPredeterminada) it.clickable { onAutorClick.invoke() } else it })
-                    Text("$totalPalabras pal.", fontSize = 10.sp, color = infoColor, maxLines = 1)
+                    val textoAutor = when { esPredeterminada -> textos.unmaskOficial; coleccion.esDescargada || coleccion.esColaboracion -> "${textos.por} @${coleccion.nombreCreador ?: "investigador"}"; else -> textos.porMi }
+                    Text(text = textoAutor, fontSize = 11.sp, fontWeight = if (textoAutor == textos.porMi) FontWeight.Bold else FontWeight.Medium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.let { if ((coleccion.esDescargada || coleccion.esColaboracion) && onAutorClick != null && !esPredeterminada) it.clickable { onAutorClick.invoke() } else it })
+                    Text("$totalPalabras ${textos.pal}", fontSize = 10.sp, color = infoColor, maxLines = 1)
                 }
             }
             Spacer(modifier = Modifier.height(12.dp)); Text(coleccion.nombre, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -345,14 +333,14 @@ fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boole
             Spacer(modifier = Modifier.weight(1f)); HorizontalDivider(color = infoColor, thickness = 1.dp); Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onInfoClick, modifier = Modifier.size(28.dp)) { Icon(Icons.Rounded.Info, null, tint = infoColor, modifier = Modifier.size(18.dp)) }
-                Button(onClick = onJugarClick, colors = ButtonDefaults.buttonColors(containerColor = if (esPredeterminada) Color(0xFF18C1A8) else Color(0xFFFF6D00)), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), modifier = Modifier.height(28.dp)) { Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(12.dp)); Spacer(Modifier.width(2.dp)); Text("JUGAR", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                Button(onClick = onJugarClick, colors = ButtonDefaults.buttonColors(containerColor = if (esPredeterminada) Color(0xFF18C1A8) else Color(0xFFFF6D00)), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), modifier = Modifier.height(28.dp)) { Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(12.dp)); Spacer(Modifier.width(2.dp)); Text(textos.btnJugar, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
             }
         }
     }
 }
 
 @Composable
-fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
+fun DialogoInfoColeccion(coleccion: ColeccionGuardada, textos: TextosInicio, onCerrar: () -> Unit) {
     var textoBusqueda by remember { mutableStateOf("") }
     val todasLasPalabras = remember(coleccion) { coleccion.elementos.flatMap { when (it) { is ElementoGuardado.Individual -> listOf(it.palabra); is ElementoGuardado.Conjunto -> it.palabras.map { p -> p.palabra } } } }
     val filtradas = todasLasPalabras.filter { it.contains(textoBusqueda, ignoreCase = true) }
@@ -368,9 +356,9 @@ fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
                     IconButton(onClick = onCerrar) { Icon(Icons.Rounded.Close, null) }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(value = textoBusqueda, onValueChange = { textoBusqueda = it }, placeholder = { Text("Buscar palabra...") }, leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50), singleLine = true)
+                OutlinedTextField(value = textoBusqueda, onValueChange = { textoBusqueda = it }, placeholder = { Text(textos.buscarPalabra) }, leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50), singleLine = true)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Contiene ${todasLasPalabras.size} palabras", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("${textos.contiene} ${todasLasPalabras.size} ${textos.palabras}", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(filtradas) { p ->
                         Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFF5F5F5), shape = RoundedCornerShape(8.dp)) {
@@ -384,7 +372,7 @@ fun DialogoInfoColeccion(coleccion: ColeccionGuardada, onCerrar: () -> Unit) {
 }
 
 @Composable
-fun TarjetaCheckpoint(checkpoint: CheckpointJuego, coleccion: ColeccionGuardada, onJugarClick: () -> Unit, onBorrarClick: () -> Unit) {
+fun TarjetaCheckpoint(checkpoint: CheckpointJuego, coleccion: ColeccionGuardada, textos: TextosInicio, onJugarClick: () -> Unit, onBorrarClick: () -> Unit) {
     val formatter = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
     val fechaTexto = formatter.format(Date(checkpoint.fecha))
     var urlFoto by remember { mutableStateOf<String?>(null) }
@@ -416,33 +404,32 @@ fun TarjetaCheckpoint(checkpoint: CheckpointJuego, coleccion: ColeccionGuardada,
                     } else Text(coleccion.nombreCreador?.take(1)?.uppercase() ?: "I", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = coleccion.nombreCreador?.let { "Por @$it" } ?: "Por Anónimo", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = coleccion.nombreCreador?.let { "${textos.por} @$it" } ?: "${textos.por} ${textos.anonimo}", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Lista: ${coleccion.nombre}", color = Color(0xFFCE93D8), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+            Text("${textos.lista} ${coleccion.nombre}", color = Color(0xFFCE93D8), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
-            Text("${checkpoint.palabrasUsadas.size} pal. usadas", color = Color(0xFFCE93D8), fontSize = 11.sp)
+            Text("${checkpoint.palabrasUsadas.size} ${textos.palUsadas}", color = Color(0xFFCE93D8), fontSize = 11.sp)
             Spacer(modifier = Modifier.weight(1f))
             Button(onClick = onJugarClick, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)), modifier = Modifier.fillMaxWidth().height(32.dp), contentPadding = PaddingValues(0.dp)) {
                 Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("CONTINUAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(textos.btnContinuar, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-// Función auxiliar para obtener el recurso de la bandera según el código
 @OptIn(org.jetbrains.compose.resources.InternalResourceApi::class)
 fun obtenerDibujableBandera(codigo: String): org.jetbrains.compose.resources.DrawableResource {
     return when (codigo) {
-        "es" -> Res.drawable.flag_es // <-- AQUÍ ESTABA EL FALLO, FALTABA ESTA LÍNEA
+        "es" -> Res.drawable.flag_es
         "en" -> Res.drawable.flag_en
         "fr" -> Res.drawable.flag_fr
         "it" -> Res.drawable.flag_it
         "de" -> Res.drawable.flag_de
         "zh" -> Res.drawable.flag_zh
         "ja" -> Res.drawable.flag_ja
-        else -> Res.drawable.flag_en // Inglés por defecto si no encuentra el idioma
+        else -> Res.drawable.flag_en
     }
 }

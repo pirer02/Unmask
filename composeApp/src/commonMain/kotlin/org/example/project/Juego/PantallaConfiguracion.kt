@@ -23,6 +23,7 @@ import androidx.compose.ui.window.Dialog
 import kotlin.math.max
 import kotlinx.coroutines.launch
 import org.example.project.Datos.*
+import org.example.project.Datos.TextosTraducidos.obtenerTextosConfiguracion
 
 @Composable
 fun PantallaConfiguracion(
@@ -35,6 +36,11 @@ fun PantallaConfiguracion(
     onVolver: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
+
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosConfiguracion(idiomaActual)
+    // -------------------------
 
     // --- ESTADOS DE CONFIGURACIÓN ---
     var numImpostores by remember { mutableStateOf(opcionesIniciales?.numImpostores ?: 1) }
@@ -53,7 +59,6 @@ fun PantallaConfiguracion(
     var mostrarAvisoSalirSinGuardar by remember { mutableStateOf(false) }
     var nombreNuevoCheckpoint by remember { mutableStateOf("") }
 
-    // 👇 Obtenemos el paso del tutorial actual
     val pasoTutorial = GestorDatos.pasoTutorialActual
 
     // --- LÓGICA DE DETECCIÓN DE CAMBIOS SIN GUARDAR ---
@@ -74,10 +79,9 @@ fun PantallaConfiguracion(
         }
     }
 
-    // 👇 BLOQUEO DEL BOTÓN ATRÁS DEL SISTEMA (Android hardware back)
     androidx.activity.compose.BackHandler(enabled = pasoTutorial == 4 || tieneCambiosSinGuardar) {
         if (pasoTutorial == 4) {
-            coroutineScope.launch { snackbarHostState.showSnackbar("Inicia la partida para continuar el tutorial o pulsa Omitir arriba.") }
+            coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgTutorialJugar) }
         } else {
             mostrarAvisoSalirSinGuardar = true
         }
@@ -99,9 +103,8 @@ fun PantallaConfiguracion(
         // CABECERA
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
-                // 👇 Impedir salir si estamos en el paso 4 del tutorial
                 if (pasoTutorial == 4) {
-                    coroutineScope.launch { snackbarHostState.showSnackbar("Inicia la partida para continuar el tutorial o pulsa Omitir arriba.") }
+                    coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgTutorialJugar) }
                 } else if (tieneCambiosSinGuardar) {
                     mostrarAvisoSalirSinGuardar = true
                 } else {
@@ -111,14 +114,13 @@ fun PantallaConfiguracion(
                 Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver")
             }
             Column {
-                Text("Configuración", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(textos.tituloConfiguracion, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(coleccion.nombre, fontSize = 14.sp, color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold)
             }
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-            // 👇 NUEVO: Espaciador dinámico para que el cartel del tutorial no tape las primeras opciones
             if (pasoTutorial == 4) {
                 Spacer(modifier = Modifier.height(200.dp))
             }
@@ -126,8 +128,8 @@ fun PantallaConfiguracion(
             TarjetaConfig(onClick = onIrAJugadores) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text("Jugadores", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text("${jugadores.size} añadidos (Mínimo 3)", fontSize = 14.sp, color = if (jugadores.size < 3) Color.Red else Color.LightGray)
+                        Text(textos.tituloJugadores, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("${jugadores.size} ${textos.descJugadores}", fontSize = 14.sp, color = if (jugadores.size < 3) Color.Red else Color.LightGray)
                     }
                     Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Color.White)
                 }
@@ -136,8 +138,8 @@ fun PantallaConfiguracion(
             TarjetaConfig {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Impostores", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text("Máximo 1 por cada 3 jugadores", fontSize = 12.sp, color = Color.LightGray)
+                        Text(textos.tituloImpostores, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(textos.descImpostores, fontSize = 12.sp, color = Color.LightGray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(Color(0xFF2A2A2A), RoundedCornerShape(8.dp))) {
                         IconButton(onClick = { if (numImpostores > 1) numImpostores-- }) { Icon(Icons.Rounded.Remove, contentDescription = "-", tint = Color.White) }
@@ -150,8 +152,8 @@ fun PantallaConfiguracion(
             TarjetaConfig {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Pista para Impostor", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text("Recibirá una pista vaga de la palabra", fontSize = 12.sp, color = Color.LightGray)
+                        Text(textos.tituloPista, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(textos.descPista, fontSize = 12.sp, color = Color.LightGray)
                     }
                     Switch(checked = pistaParaImpostor, onCheckedChange = { pistaParaImpostor = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF18C1A8)))
                 }
@@ -161,8 +163,8 @@ fun PantallaConfiguracion(
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("No repetir palabras", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Evita que salgan palabras de partidas anteriores", fontSize = 12.sp, color = Color.LightGray)
+                            Text(textos.tituloNoRepetir, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(textos.descNoRepetir, fontSize = 12.sp, color = Color.LightGray)
                         }
                         Switch(
                             checked = sinRepeticiones,
@@ -186,7 +188,7 @@ fun PantallaConfiguracion(
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Restantes: $palabrasRestantes / $totalPalabras",
+                                "${textos.restantes} $palabrasRestantes / $totalPalabras",
                                 color = if (palabrasRestantes <= 0) Color.Red else Color(0xFFFF6D00),
                                 fontWeight = FontWeight.Bold
                             )
@@ -198,7 +200,7 @@ fun PantallaConfiguracion(
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 8.dp)
                                 ) {
-                                    Text("Cargar", fontSize = 12.sp)
+                                    Text(textos.btnCargar, fontSize = 12.sp)
                                 }
 
                                 Button(
@@ -207,7 +209,7 @@ fun PantallaConfiguracion(
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 8.dp)
                                 ) {
-                                    Text("Guardar", fontSize = 12.sp)
+                                    Text(textos.btnGuardar, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -215,7 +217,7 @@ fun PantallaConfiguracion(
                         if (GestorDatos.checkpointActivoId != null) {
                             val cp = GestorDatos.checkpointsGlobales.find { it.id == GestorDatos.checkpointActivoId }
                             if (cp != null) {
-                                Text("Checkpoint activo: ${cp.nombre}", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                                Text("${textos.checkpointActivo} ${cp.nombre}", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
                             }
                         }
                     }
@@ -226,8 +228,8 @@ fun PantallaConfiguracion(
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text("Límite de Rondas", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(if (limiteRondas) "$rondas rondas" else "Indefinido", fontSize = 12.sp, color = Color.LightGray)
+                            Text(textos.tituloRondas, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(if (limiteRondas) "$rondas ${textos.txtRondas}" else textos.txtIndefinido, fontSize = 12.sp, color = Color.LightGray)
                         }
                         Switch(checked = limiteRondas, onCheckedChange = { limiteRondas = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFFF6D00)))
                     }
@@ -242,8 +244,8 @@ fun PantallaConfiguracion(
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text("Límite de Tiempo", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(if (limiteTiempo) "$tiempoMinutos minutos" else "Sin límite", fontSize = 12.sp, color = Color.LightGray)
+                            Text(textos.tituloTiempo, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(if (limiteTiempo) "$tiempoMinutos ${textos.txtMinutos}" else textos.txtSinLimite, fontSize = 12.sp, color = Color.LightGray)
                         }
                         Switch(checked = limiteTiempo, onCheckedChange = { limiteTiempo = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFFF6D00)))
                     }
@@ -259,9 +261,9 @@ fun PantallaConfiguracion(
             Button(
                 onClick = {
                     if (jugadores.size < 3) {
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Faltan jugadores. Necesitas mínimo 3.") }
+                        coroutineScope.launch { snackbarHostState.showSnackbar(textos.errorMinJugadores) }
                     } else if (sinRepeticiones && palabrasRestantes <= 0) {
-                        coroutineScope.launch { snackbarHostState.showSnackbar("No quedan palabras nuevas. Apaga y enciende la opción o carga otro checkpoint.") }
+                        coroutineScope.launch { snackbarHostState.showSnackbar(textos.errorNoPalabras) }
                     } else {
                         val opciones = OpcionesJuego(numImpostores, pistaParaImpostor, limiteRondas, rondas, limiteTiempo, tiempoMinutos, sinRepeticiones)
                         onIniciarJuego(opciones)
@@ -273,9 +275,8 @@ fun PantallaConfiguracion(
             ) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(28.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                // 👇 Destacar el texto del botón si estamos en el paso 4 del tutorial
                 Text(
-                    text = if (pasoTutorial == 4) "¡INICIA LA PARTIDA AQUÍ!" else "INICIAR PARTIDA",
+                    text = if (pasoTutorial == 4) textos.btnIniciaAqui else textos.btnIniciarPartida,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -289,8 +290,8 @@ fun PantallaConfiguracion(
         AlertDialog(
             onDismissRequest = { mostrarAvisoSalirSinGuardar = false },
             icon = { Icon(Icons.Rounded.Warning, contentDescription = null, tint = Color(0xFFFF6D00)) },
-            title = { Text("¿Salir sin guardar?", textAlign = TextAlign.Center) },
-            text = { Text("Has realizado cambios en la configuración o tienes progreso de palabras sin guardar. Si sales ahora, se perderán.", textAlign = TextAlign.Center) },
+            title = { Text(textos.dialogoSalirTitulo, textAlign = TextAlign.Center) },
+            text = { Text(textos.dialogoSalirDesc, textAlign = TextAlign.Center) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -299,7 +300,7 @@ fun PantallaConfiguracion(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("GUARDAR PRIMERO") }
+                ) { Text(textos.btnGuardarPrimero) }
             },
             dismissButton = {
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -308,10 +309,10 @@ fun PantallaConfiguracion(
                             mostrarAvisoSalirSinGuardar = false
                             onVolver()
                         }
-                    ) { Text("IGNORAR Y SALIR", color = Color.Red) }
+                    ) { Text(textos.btnIgnorarSalir, color = Color.Red) }
 
                     TextButton(onClick = { mostrarAvisoSalirSinGuardar = false }) {
-                        Text("CANCELAR", color = Color.Gray)
+                        Text(textos.btnCancelar, color = Color.Gray)
                     }
                 }
             }
@@ -329,19 +330,19 @@ fun PantallaConfiguracion(
                     }
                     Icon(Icons.Rounded.History, contentDescription = null, tint = Color(0xFF18C1A8), modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Gestión de Progreso", fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Text("¿Quieres retomar una partida anterior o empezar una ruta de palabras nueva?", fontSize = 14.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                    Text(textos.dialogoGestionTitulo, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Text(textos.dialogoGestionDesc, fontSize = 14.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(onClick = { mostrarRecordatorioCheckpoint = false; mostrarDialogoCargarCheckpoint = true }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C)), shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Rounded.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("CARGAR PARTIDA", fontWeight = FontWeight.Bold)
+                        Text(textos.btnCargarPartida, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(onClick = { sinRepeticiones = true; GestorDatos.checkpointActivoId = null; GestorDatos.palabrasUsadasSesion.clear(); mostrarRecordatorioCheckpoint = false }, modifier = Modifier.fillMaxWidth().height(56.dp), border = BorderStroke(2.dp, Color(0xFF18C1A8)), shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Rounded.Add, contentDescription = null, tint = Color(0xFF18C1A8))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("EMPEZAR DE CERO", fontWeight = FontWeight.Bold, color = Color(0xFF18C1A8))
+                        Text(textos.btnEmpezarCero, fontWeight = FontWeight.Bold, color = Color(0xFF18C1A8))
                     }
                 }
             }
@@ -351,38 +352,37 @@ fun PantallaConfiguracion(
     if (mostrarDialogoIncompatible) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoIncompatible = false },
-            title = { Text("Checkpoint Incompatible") },
-            text = { Text("No puedes desactivar esta opción mientras usas un checkpoint. ¿Quieres guardar el progreso actual primero?") },
+            title = { Text(textos.dialogoIncompatibleTitulo) },
+            text = { Text(textos.dialogoIncompatibleDesc) },
             confirmButton = {
                 Button(onClick = { mostrarDialogoIncompatible = false; mostrarDialogoGuardarCheckpoint = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) {
-                    Text("GUARDAR PROGRESO")
+                    Text(textos.btnGuardarProgreso)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sinRepeticiones = false; GestorDatos.checkpointActivoId = null; GestorDatos.palabrasUsadasSesion.clear(); mostrarDialogoIncompatible = false }) {
-                    Text("DESCARTAR Y DESACTIVAR", color = Color.Red)
+                    Text(textos.btnDescartarDesactivar, color = Color.Red)
                 }
             }
         )
     }
 
-    // 👇 AÑADE ESTA LÍNEA AL PRINCIPIO DE PantallaConfiguracion PARA TENER EL UID
     val usuarioAuth by GestorAuth.usuario.collectAsState()
 
     if (mostrarDialogoGuardarCheckpoint) {
         val cpsDeEstaLista = GestorDatos.checkpointsGlobales.filter { it.nombreColeccion == coleccion.nombre && it.idCreadorColeccion == coleccion.idCreador }
         AlertDialog(
             onDismissRequest = { mostrarDialogoGuardarCheckpoint = false },
-            title = { Text("Guardar Checkpoint") },
+            title = { Text(textos.dialogoGuardarCpTitulo) },
             text = {
                 Column {
-                    OutlinedTextField(value = nombreNuevoCheckpoint, onValueChange = { nombreNuevoCheckpoint = it }, label = { Text("Nombre para este Checkpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(value = nombreNuevoCheckpoint, onValueChange = { nombreNuevoCheckpoint = it }, label = { Text(textos.labelNombreCp) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     if (cpsDeEstaLista.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("O actualiza uno existente:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(textos.txtActualizaExistente, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         LazyColumn(modifier = Modifier.heightIn(max = 150.dp)) {
                             items(cpsDeEstaLista) { cp ->
-                                Text(text = "Actualizar: ${cp.nombre}", color = Color(0xFFFF6D00), modifier = Modifier.fillMaxWidth().clickable {
+                                Text(text = "${textos.txtActualizar} ${cp.nombre}", color = Color(0xFFFF6D00), modifier = Modifier.fillMaxWidth().clickable {
                                     val actualizado = cp.copy(
                                         fecha = System.currentTimeMillis(),
                                         palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
@@ -393,13 +393,12 @@ fun PantallaConfiguracion(
                                     GestorDatos.checkpointActivoId = actualizado.id
                                     GestorDatos.guardarCambiosMemoria()
 
-                                    // 👇 NUEVO: Sincronización inmediata con la nube
                                     usuarioAuth?.uid?.let { uid ->
                                         coroutineScope.launch { GestorDatos.subirCheckpointsNube(uid) }
                                     }
 
                                     mostrarDialogoGuardarCheckpoint = false
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Checkpoint actualizado en la nube") }
+                                    coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgCpActualizado) }
                                 }.padding(vertical = 8.dp))
                             }
                         }
@@ -421,17 +420,16 @@ fun PantallaConfiguracion(
                         GestorDatos.checkpointActivoId = nuevoCp.id
                         GestorDatos.guardarCambiosMemoria()
 
-                        // 👇 NUEVO: Sincronización inmediata con la nube
                         usuarioAuth?.uid?.let { uid ->
                             coroutineScope.launch { GestorDatos.subirCheckpointsNube(uid) }
                         }
 
                         mostrarDialogoGuardarCheckpoint = false
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Nuevo checkpoint guardado en la nube") }
+                        coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgCpGuardado) }
                     }
-                }, enabled = nombreNuevoCheckpoint.isNotBlank()) { Text("CREAR NUEVO") }
+                }, enabled = nombreNuevoCheckpoint.isNotBlank()) { Text(textos.btnCrearNuevo) }
             },
-            dismissButton = { TextButton(onClick = { mostrarDialogoGuardarCheckpoint = false }) { Text("CANCELAR", color = Color.Gray) } }
+            dismissButton = { TextButton(onClick = { mostrarDialogoGuardarCheckpoint = false }) { Text(textos.btnCancelar, color = Color.Gray) } }
         )
     }
 
@@ -439,22 +437,22 @@ fun PantallaConfiguracion(
         val cpsDeEstaLista = GestorDatos.checkpointsGlobales.filter { it.nombreColeccion == coleccion.nombre && it.idCreadorColeccion == coleccion.idCreador }
         AlertDialog(
             onDismissRequest = { mostrarDialogoCargarCheckpoint = false },
-            title = { Text("Cargar Checkpoint") },
+            title = { Text(textos.dialogoCargarCpTitulo) },
             text = {
-                if (cpsDeEstaLista.isEmpty()) { Text("No tienes checkpoints guardados para esta lista.") } else {
+                if (cpsDeEstaLista.isEmpty()) { Text(textos.txtNoCps) } else {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(cpsDeEstaLista) { cp ->
                             Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
                                 GestorDatos.palabrasUsadasSesion.clear(); GestorDatos.palabrasUsadasSesion.addAll(cp.palabrasUsadas); GestorDatos.checkpointActivoId = cp.id
                                 numImpostores = cp.opciones.numImpostores; pistaParaImpostor = cp.opciones.pistaParaImpostor; limiteRondas = cp.opciones.limiteRondas; rondas = cp.opciones.rondas; limiteTiempo = cp.opciones.limiteTiempo; tiempoMinutos = cp.opciones.tiempoMinutos; sinRepeticiones = cp.opciones.sinRepeticiones
                                 mostrarDialogoCargarCheckpoint = false
-                                coroutineScope.launch { snackbarHostState.showSnackbar("Progreso de ${cp.nombre} cargado") }
+                                coroutineScope.launch { snackbarHostState.showSnackbar("${textos.msgProgresoCargado} ${cp.nombre} ${textos.msgCargadoExito}".trim()) }
                             }, color = Color(0xFFE8F0FE), shape = RoundedCornerShape(8.dp)) { Text(cp.nombre, modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold) }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { mostrarDialogoCargarCheckpoint = false }) { Text("CERRAR") } }
+            confirmButton = { TextButton(onClick = { mostrarDialogoCargarCheckpoint = false }) { Text(textos.btnCerrar) } }
         )
     }
 }

@@ -1,7 +1,6 @@
 package org.example.project
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,6 +40,8 @@ import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.preat.peekaboo.image.picker.rememberImagePickerLauncher
 import com.preat.peekaboo.image.picker.SelectionMode
 import com.preat.peekaboo.image.picker.ResizeOptions
+import org.example.project.Datos.TextosTraducidos.TextosPerfil
+import org.example.project.Datos.TextosTraducidos.obtenerTextosPerfil
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import androidx.compose.foundation.Image as ComposeImage
@@ -54,11 +55,16 @@ fun PantallaMiPerfil(
     onIniciarSesionGoogle: () -> Unit,
     onEditar: (ColeccionGuardada) -> Unit,
     onJugar: (ColeccionGuardada) -> Unit,
-    onVerPerfilAjeno: (String) -> Unit // 👇 NUEVO PARÁMETRO
+    onVerPerfilAjeno: (String) -> Unit
 ) {
     val usuarioAuth by GestorAuth.usuario.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosPerfil(idiomaActual)
+    // -------------------------
 
     var seccionActual by remember { mutableStateOf(SeccionPerfil.PRINCIPAL) }
     var estadoPantalla by remember { mutableStateOf("CARGANDO") }
@@ -90,9 +96,9 @@ fun PantallaMiPerfil(
     var coleccionGestionando by remember { mutableStateOf<ColeccionGuardada?>(null) }
     var perfilesColaboradores by remember { mutableStateOf<List<PerfilSocial>>(emptyList()) }
     var perfilesPendientes by remember { mutableStateOf<List<PerfilSocial>>(emptyList()) }
-    var perfilCreador by remember { mutableStateOf<PerfilSocial?>(null) } // 👇 NUEVO: Para guardar el creador
+    var perfilCreador by remember { mutableStateOf<PerfilSocial?>(null) }
     var cargandoColaboradores by remember { mutableStateOf(false) }
-    var textoBusquedaColabs by remember { mutableStateOf("") } // 👇 NUEVO: Buscador en gestión de colaboradores
+    var textoBusquedaColabs by remember { mutableStateOf("") }
 
     var mostrarMenuFoto by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
@@ -105,6 +111,8 @@ fun PantallaMiPerfil(
 
     var misCreacionesExpandido by remember { mutableStateOf(false) }
     var textoBusquedaCreaciones by remember { mutableStateOf("") }
+
+    // Mantenemos el filtro interno en español para no romper la lógica de ordenamiento
     var filtroOrdenCreaciones by remember { mutableStateOf("Nuevas") }
 
     var mostrarDialogoDescripcion by remember { mutableStateOf(false) }
@@ -123,9 +131,9 @@ fun PantallaMiPerfil(
                     usuarioAuth?.uid?.let { uid ->
                         if (GestorAuth.actualizarFotoPerfil(uid, base64String)) {
                             miPerfilSocial = miPerfilSocial?.copy(fotoPerfil = base64String)
-                            snackbarHostState.showSnackbar("Foto de perfil actualizada correctamente")
+                            snackbarHostState.showSnackbar(textos.msgFotoExito)
                         } else {
-                            snackbarHostState.showSnackbar("Error al subir la foto")
+                            snackbarHostState.showSnackbar(textos.msgFotoError)
                         }
                     }
                 }
@@ -136,7 +144,6 @@ fun PantallaMiPerfil(
     LaunchedEffect(mostrarDialogoCompartir, coleccionACompartir) {
         if (mostrarDialogoCompartir && coleccionACompartir != null && usuarioAuth != null) {
             textoBusquedaAmigo = ""
-            // Ya no usamos obtenerInvitadosPendientes, usamos directamente invitacionesEnviadas
         }
     }
 
@@ -189,7 +196,7 @@ fun PantallaMiPerfil(
                         mostrarDialogoMigracion = true
                     } else {
                         GestorDatos.descargarDatosNube(usuarioAuth!!.uid)
-                        snackbarHostState.showSnackbar("¡Bienvenido de nuevo!")
+                        snackbarHostState.showSnackbar(textos.msgBienvenidoNuevo)
                         clicEnIniciarSesion = false
                         estadoPantalla = "PERFIL"
                     }
@@ -223,7 +230,7 @@ fun PantallaMiPerfil(
                     Icon(Icons.Rounded.ArrowBack, contentDescription = null, tint = Color(0xFF1A1A1A))
                 }
                 Text(
-                    text = if (seccionActual == SeccionPerfil.LISTA_USUARIOS) tituloListaUsuarios else "Mi Perfil",
+                    text = if (seccionActual == SeccionPerfil.LISTA_USUARIOS) tituloListaUsuarios else textos.tituloMiPerfil,
                     fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A)
                 )
                 Spacer(modifier = Modifier.weight(1f))
@@ -239,12 +246,12 @@ fun PantallaMiPerfil(
                             modifier = Modifier.background(Color.White)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Cerrar sesión") },
+                                text = { Text(textos.btnCerrarSesion) },
                                 onClick = { mostrarMenuOpciones = false; mostrarDialogoCerrar = true },
                                 leadingIcon = { Icon(Icons.Rounded.Logout, null, tint = Color.Gray) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Eliminar cuenta", color = Color.Red) },
+                                text = { Text(textos.btnEliminarCuenta, color = Color.Red) },
                                 onClick = { mostrarMenuOpciones = false; mostrarDialogoBorrar = true },
                                 leadingIcon = { Icon(Icons.Rounded.Warning, null, tint = Color.Red) }
                             )
@@ -278,14 +285,16 @@ fun PantallaMiPerfil(
                                 Icon(Icons.Rounded.CloudSync, null, modifier = Modifier.size(48.dp), tint = Color(0xFF00897B))
                             }
                             Spacer(modifier = Modifier.height(24.dp))
-                            Text("¡Sincroniza tus datos!", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, textAlign = TextAlign.Center)
+                            Text(textos.tituloSincroniza, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, textAlign = TextAlign.Center)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(textos.descSincroniza, textAlign = TextAlign.Center, color = Color.Gray)
                             Spacer(modifier = Modifier.height(32.dp))
                             Button(
                                 onClick = { clicEnIniciarSesion = true; estadoPantalla = "CARGANDO"; onIniciarSesionGoogle() },
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8)),
                                 shape = RoundedCornerShape(16.dp)
-                            ) { Text("INICIAR SESIÓN", fontWeight = FontWeight.Bold) }
+                            ) { Text(textos.btnIniciarSesion, fontWeight = FontWeight.Bold) }
                         }
                     }
                 }
@@ -347,19 +356,17 @@ fun PantallaMiPerfil(
                                         Text("@$nombreMostrar", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                                         Text(usuarioAuth?.email ?: "", color = Color(0xFFE0F2F1), fontSize = 14.sp)
 
-                                        // 👇 NUEVO: Mostrar descripción o botón para añadirla
                                         Spacer(modifier = Modifier.height(12.dp))
                                         val descText = miPerfilSocial?.descripcion
                                         if (descText.isNullOrBlank()) {
                                             TextButton(onClick = { inputDescripcion = ""; mostrarDialogoDescripcion = true }) {
-                                                Text("Añadir descripción sobre mí...", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                                                Text(textos.anadirDescripcion, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
                                             }
                                         } else {
-                                            // 👇 CAMBIO: Descripción envuelta en una caja blanca estilizada
                                             Surface(
-                                                color = Color.White.copy(alpha = 0.95f), // Caja blanca casi sólida
+                                                color = Color.White.copy(alpha = 0.95f),
                                                 shape = RoundedCornerShape(16.dp),
-                                                shadowElevation = 4.dp, // Un poquito de sombra para que resalte del fondo
+                                                shadowElevation = 4.dp,
                                                 modifier = Modifier
                                                     .padding(horizontal = 24.dp)
                                                     .fillMaxWidth()
@@ -372,7 +379,7 @@ fun PantallaMiPerfil(
                                                 ) {
                                                     Text(
                                                         text = descText,
-                                                        color = Color(0xFF00897B), // Texto en verde oscuro para que contraste
+                                                        color = Color(0xFF00897B),
                                                         fontSize = 14.sp,
                                                         textAlign = TextAlign.Center,
                                                         fontWeight = FontWeight.Medium,
@@ -391,18 +398,17 @@ fun PantallaMiPerfil(
 
                                         Spacer(modifier = Modifier.height(24.dp))
 
-                                        Spacer(modifier = Modifier.height(24.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                                            ColumnaStats(miPerfilSocial?.seguidores?.size?.toString() ?: "0", "Seguidores", blanco = true) {
+                                            ColumnaStats(miPerfilSocial?.seguidores?.size?.toString() ?: "0", textos.seguidores, blanco = true) {
                                                 scope.launch {
-                                                    tituloListaUsuarios = "Seguidores"
+                                                    tituloListaUsuarios = textos.seguidores
                                                     usuariosAMostrar = miPerfilSocial?.seguidores?.mapNotNull { GestorAuth.obtenerPerfilSocial(it) } ?: emptyList()
                                                     seccionActual = SeccionPerfil.LISTA_USUARIOS
                                                 }
                                             }
-                                            ColumnaStats(miPerfilSocial?.seguidos?.size?.toString() ?: "0", "Siguiendo", blanco = true) {
+                                            ColumnaStats(miPerfilSocial?.seguidos?.size?.toString() ?: "0", textos.siguiendo, blanco = true) {
                                                 scope.launch {
-                                                    tituloListaUsuarios = "Siguiendo"
+                                                    tituloListaUsuarios = textos.siguiendo
                                                     usuariosAMostrar = miPerfilSocial?.seguidos?.mapNotNull { GestorAuth.obtenerPerfilSocial(it) } ?: emptyList()
                                                     seccionActual = SeccionPerfil.LISTA_USUARIOS
                                                 }
@@ -426,8 +432,8 @@ fun PantallaMiPerfil(
                                         ) {
                                             Icon(Icons.Rounded.LibraryBooks, null, tint = Color(0xFFFF6D00))
                                             Spacer(modifier = Modifier.width(12.dp))
-                                            Text("Mis Creaciones", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                                            Icon(imageVector = if (misCreacionesExpandido) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, contentDescription = if (misCreacionesExpandido) "Ocultar" else "Mostrar", tint = Color.Gray)
+                                            Text(textos.misCreaciones, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                                            Icon(imageVector = if (misCreacionesExpandido) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = Color.Gray)
                                         }
 
                                         AnimatedVisibility(visible = misCreacionesExpandido) {
@@ -435,12 +441,12 @@ fun PantallaMiPerfil(
                                                 Spacer(modifier = Modifier.height(16.dp))
 
                                                 if (GestorDatos.coleccionesGlobales.isEmpty()) {
-                                                    Text("No tienes listas aún.", color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                                                    Text(textos.sinListas, color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                                                 } else {
                                                     OutlinedTextField(
                                                         value = textoBusquedaCreaciones,
                                                         onValueChange = { textoBusquedaCreaciones = it },
-                                                        placeholder = { Text("Buscar tus listas...") },
+                                                        placeholder = { Text(textos.buscarListas) },
                                                         leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
                                                         trailingIcon = { if (textoBusquedaCreaciones.isNotEmpty()) { IconButton(onClick = { textoBusquedaCreaciones = "" }) { Icon(Icons.Rounded.Clear, null) } } },
                                                         modifier = Modifier.fillMaxWidth(),
@@ -452,14 +458,20 @@ fun PantallaMiPerfil(
                                                     Spacer(modifier = Modifier.height(12.dp))
 
                                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                        val opciones = listOf("Nuevas", "Populares", "Mayor a menor", "Menor a mayor")
-                                                        items(opciones) { opcion ->
+                                                        // Aislamos la UI de la lógica interna de ordenamiento
+                                                        val opcionesInternas = listOf("Nuevas", "Populares", "Mayor a menor", "Menor a mayor")
+                                                        val opcionesUi = listOf(textos.filtroNuevas, textos.filtroPopulares, textos.filtroMayorMenor, textos.filtroMenorMayor)
+
+                                                        items(opcionesInternas.size) { index ->
+                                                            val opcionInt = opcionesInternas[index]
+                                                            val opcionUi = opcionesUi[index]
+
                                                             FilterChip(
-                                                                selected = filtroOrdenCreaciones == opcion,
-                                                                onClick = { filtroOrdenCreaciones = opcion },
-                                                                label = { Text(opcion, fontSize = 12.sp) },
+                                                                selected = filtroOrdenCreaciones == opcionInt,
+                                                                onClick = { filtroOrdenCreaciones = opcionInt },
+                                                                label = { Text(opcionUi, fontSize = 12.sp) },
                                                                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFFF6D00), selectedLabelColor = Color.White),
-                                                                border = FilterChipDefaults.filterChipBorder(enabled = true, selected = filtroOrdenCreaciones == opcion, borderColor = if (filtroOrdenCreaciones == opcion) Color.Transparent else Color.LightGray)
+                                                                border = FilterChipDefaults.filterChipBorder(enabled = true, selected = filtroOrdenCreaciones == opcionInt, borderColor = if (filtroOrdenCreaciones == opcionInt) Color.Transparent else Color.LightGray)
                                                             )
                                                         }
                                                     }
@@ -467,7 +479,6 @@ fun PantallaMiPerfil(
                                                     Spacer(modifier = Modifier.height(16.dp))
 
                                                     val misListasFiltradas = GestorDatos.coleccionesGlobales.filter { col ->
-                                                        // 👇 CAMBIO: Exigimos que NO sea una lista descargada para que aparezca aquí
                                                         !col.esDescargada &&
                                                                 (col.nombre.contains(textoBusquedaCreaciones, ignoreCase = true) || col.categoria.contains(textoBusquedaCreaciones, ignoreCase = true))
                                                     }
@@ -480,12 +491,13 @@ fun PantallaMiPerfil(
                                                     }
 
                                                     if (misListasOrdenadas.isEmpty()) {
-                                                        Text("No se encontraron resultados.", color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                                                        Text(textos.sinResultados, color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                                                     } else {
                                                         misListasOrdenadas.forEach { col ->
                                                             TarjetaColeccionPerfil(
                                                                 coleccion = col,
                                                                 tienePendientes = invitacionesEnviadas.any { it.nombreLista == col.nombre },
+                                                                textos = textos,
                                                                 onDelete = { coleccionParaBorrar = col },
                                                                 onEdit = { onEditar(col) },
                                                                 onPlay = { onJugar(col) },
@@ -523,7 +535,7 @@ fun PantallaMiPerfil(
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (usuariosAMostrar.isEmpty()) {
-                                item { Text("No hay usuarios en esta lista.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 40.dp)) }
+                                item { Text(textos.sinUsuariosLista, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 40.dp)) }
                             } else {
                                 items(usuariosAMostrar) { perfil ->
                                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -561,15 +573,15 @@ fun PantallaMiPerfil(
     if (mostrarDialogoCompartir && coleccionACompartir != null) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoCompartir = false; textoBusquedaAmigo = "" },
-            title = { Text("Invitar Colaborador") },
+            title = { Text(textos.tituloInvitar) },
             text = {
                 Column {
-                    Text("Añade a alguien para que te ayude a rellenar '${coleccionACompartir?.nombre}'.", fontSize = 14.sp, color = Color.Gray)
+                    Text("${textos.descInvitar1}${coleccionACompartir?.nombre}${textos.descInvitar2}", fontSize = 14.sp, color = Color.Gray)
                     Spacer(Modifier.height(16.dp))
                     OutlinedTextField(
                         value = textoBusquedaAmigo,
                         onValueChange = { textoBusquedaAmigo = it },
-                        placeholder = { Text("Nombre del investigador...") },
+                        placeholder = { Text(textos.buscarInvestigador) },
                         leadingIcon = { Icon(Icons.Rounded.PersonSearch, null) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -578,15 +590,14 @@ fun PantallaMiPerfil(
                     Spacer(Modifier.height(12.dp))
 
                     if (buscandoAmigos) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).size(24.dp))
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).size(24.dp), color = Color(0xFFFF6D00))
                     } else if (textoBusquedaAmigo.length >= 2 && resultadosAmigos.isEmpty()) {
-                        Text("No se encontró a nadie para invitar o ya tienen invitación.", fontSize = 12.sp, color = Color.Red)
+                        Text(textos.sinInvestigadores, fontSize = 12.sp, color = Color.Red)
                     }
 
                     LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
                         items(resultadosAmigos) { perfil ->
                             ListItem(
-                                // 👇 NUEVO: Clickable para ir al perfil
                                 modifier = Modifier.clickable {
                                     mostrarDialogoCompartir = false
                                     onVerPerfilAjeno(perfil.uid)
@@ -629,35 +640,35 @@ fun PantallaMiPerfil(
                                                 )
                                                 invitacionesEnviadas = invitacionesEnviadas + nuevaInvitacion
                                                 resultadosAmigos = resultadosAmigos.filter { it.uid != perfil.uid }
-                                                snackbarHostState.showSnackbar("Invitación enviada a @${perfil.username}")
+                                                snackbarHostState.showSnackbar("${textos.msgInvitacionEnviada} @${perfil.username}")
                                             } else {
-                                                snackbarHostState.showSnackbar("Error al enviar invitación")
+                                                snackbarHostState.showSnackbar(textos.msgErrorInvitacion)
                                             }
                                         }
-                                    }) { Text("INVITAR") }
+                                    }) { Text(textos.btnInvitar) }
                                 }
                             )
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { mostrarDialogoCompartir = false; textoBusquedaAmigo = "" }) { Text("CERRAR") } }
+            confirmButton = { TextButton(onClick = { mostrarDialogoCompartir = false; textoBusquedaAmigo = "" }) { Text(textos.btnCerrar) } }
         )
     }
 
     if (mostrarDialogoGestionColaboradores && coleccionGestionando != null) {
         val esCreadorOriginal = !coleccionGestionando!!.esColaboracion
-        val miUid = usuarioAuth?.uid // Identificador propio
+        val miUid = usuarioAuth?.uid
 
         AlertDialog(
             onDismissRequest = { mostrarDialogoGestionColaboradores = false },
-            title = { Text("Personas en esta lista") },
+            title = { Text(textos.tituloPersonas) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = textoBusquedaColabs,
                         onValueChange = { textoBusquedaColabs = it },
-                        placeholder = { Text("Buscar usuarios por nombre...") },
+                        placeholder = { Text(textos.buscarUsuarios) },
                         leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                         shape = RoundedCornerShape(50),
@@ -668,19 +679,18 @@ fun PantallaMiPerfil(
                         )
                     )
 
-                    Text("Usuarios que pueden editar '${coleccionGestionando?.nombre}':", fontSize = 14.sp, color = Color.Gray)
+                    Text("${textos.descPersonas1}${coleccionGestionando?.nombre}${textos.descPersonas2}", fontSize = 14.sp, color = Color.Gray)
                     Spacer(Modifier.height(16.dp))
 
                     if (cargandoColaboradores) {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).size(24.dp), color = Color(0xFFFF6D00))
                     } else {
-                        // 👇 CAMBIO: Aplicamos el filtro para excluir tu propio UID (miUid)
                         val creadorFiltrado = perfilCreador?.takeIf { it.uid != miUid && it.username.contains(textoBusquedaColabs, ignoreCase = true) }
                         val colabsFiltrados = perfilesColaboradores.filter { it.uid != miUid && it.username.contains(textoBusquedaColabs, ignoreCase = true) }
                         val pendFiltrados = perfilesPendientes.filter { it.uid != miUid && it.username.contains(textoBusquedaColabs, ignoreCase = true) }
 
                         if (creadorFiltrado == null && colabsFiltrados.isEmpty() && pendFiltrados.isEmpty()) {
-                            Text("No se encontraron otros usuarios.", fontSize = 14.sp, color = Color.Gray)
+                            Text(textos.sinOtrosUsuarios, fontSize = 14.sp, color = Color.Gray)
                         } else {
                             LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
 
@@ -692,7 +702,7 @@ fun PantallaMiPerfil(
                                                 onVerPerfilAjeno(perfil.uid)
                                             },
                                             headlineContent = { Text("@${perfil.username}", fontWeight = FontWeight.Bold, color = Color(0xFF1A73E8)) },
-                                            supportingContent = { Text("Creador", color = Color(0xFFD4AF37), fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                                            supportingContent = { Text(textos.rolCreador, color = Color(0xFFD4AF37), fontSize = 12.sp, fontWeight = FontWeight.Bold) },
                                             leadingContent = {
                                                 Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFFFF8E1)), contentAlignment = Alignment.Center) {
                                                     if (!perfil.fotoPerfil.isNullOrEmpty()) {
@@ -711,7 +721,7 @@ fun PantallaMiPerfil(
                                                     }
                                                 }
                                             },
-                                            trailingContent = { Icon(Icons.Rounded.Star, contentDescription = "Creador", tint = Color(0xFFD4AF37)) }
+                                            trailingContent = { Icon(Icons.Rounded.Star, contentDescription = null, tint = Color(0xFFD4AF37)) }
                                         )
                                     }
                                 }
@@ -723,7 +733,7 @@ fun PantallaMiPerfil(
                                             onVerPerfilAjeno(perfil.uid)
                                         },
                                         headlineContent = { Text("@${perfil.username}", fontWeight = FontWeight.Bold, color = Color(0xFF1A73E8)) },
-                                        supportingContent = { Text("Colaborador", color = Color(0xFF18C1A8), fontSize = 12.sp) },
+                                        supportingContent = { Text(textos.rolColaborador, color = Color(0xFF18C1A8), fontSize = 12.sp) },
                                         leadingContent = {
                                             Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFE0F2F1)), contentAlignment = Alignment.Center) {
                                                 if (!perfil.fotoPerfil.isNullOrEmpty()) {
@@ -753,11 +763,11 @@ fun PantallaMiPerfil(
                                                                 colaboradores = coleccionGestionando!!.colaboradores.filter { it != perfil.uid }
                                                             )
                                                             if (perfilesColaboradores.isEmpty() && perfilesPendientes.isEmpty()) mostrarDialogoGestionColaboradores = false
-                                                            snackbarHostState.showSnackbar("Expulsado a @${perfil.username}")
+                                                            snackbarHostState.showSnackbar("${textos.msgExpulsado} @${perfil.username}")
                                                         }
                                                     }
                                                 }) {
-                                                    Icon(Icons.Rounded.PersonRemove, contentDescription = "Expulsar", tint = Color.Red)
+                                                    Icon(Icons.Rounded.PersonRemove, contentDescription = null, tint = Color.Red)
                                                 }
                                             }
                                         }
@@ -771,7 +781,7 @@ fun PantallaMiPerfil(
                                             onVerPerfilAjeno(perfil.uid)
                                         },
                                         headlineContent = { Text("@${perfil.username}", fontWeight = FontWeight.Bold, color = Color(0xFF1A73E8).copy(alpha=0.6f)) },
-                                        supportingContent = { Text("En espera de respuesta...", color = Color.Gray, fontSize = 12.sp) },
+                                        supportingContent = { Text(textos.rolEspera, color = Color.Gray, fontSize = 12.sp) },
                                         leadingContent = {
                                             Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFE0F2F1).copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
                                                 if (!perfil.fotoPerfil.isNullOrEmpty()) {
@@ -802,7 +812,7 @@ fun PantallaMiPerfil(
                                                             if (perfilesColaboradores.isEmpty() && perfilesPendientes.isEmpty()) mostrarDialogoGestionColaboradores = false
                                                         }
                                                     }
-                                                }) { Icon(Icons.Rounded.Cancel, tint = Color.Gray, contentDescription = "Cancelar invitación") }
+                                                }) { Icon(Icons.Rounded.Cancel, tint = Color.Gray, contentDescription = null) }
                                             }
                                         }
                                     )
@@ -812,7 +822,7 @@ fun PantallaMiPerfil(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { mostrarDialogoGestionColaboradores = false }) { Text("CERRAR") } }
+            confirmButton = { TextButton(onClick = { mostrarDialogoGestionColaboradores = false }) { Text(textos.btnCerrar) } }
         )
     }
 
@@ -825,7 +835,7 @@ fun PantallaMiPerfil(
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
                 Text(
-                    "Actualizar foto de perfil",
+                    textos.tituloFoto,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
@@ -833,14 +843,14 @@ fun PantallaMiPerfil(
                 HorizontalDivider(color = Color(0xFFF0F0F0))
 
                 ListItem(
-                    headlineContent = { Text("Elegir de la galería") },
-                    supportingContent = { Text("Se comprimirá automáticamente") },
+                    headlineContent = { Text(textos.opcionGaleria) },
+                    supportingContent = { Text(textos.descGaleria) },
                     leadingContent = { Icon(Icons.Rounded.PhotoLibrary, null, tint = Color(0xFF00897B)) },
                     modifier = Modifier.clickable { mostrarMenuFoto = false; imagePicker.launch() }
                 )
                 ListItem(
-                    headlineContent = { Text("Buscar en Internet") },
-                    supportingContent = { Text("Elegir un avatar predefinido") },
+                    headlineContent = { Text(textos.opcionInternet) },
+                    supportingContent = { Text(textos.descInternet) },
                     leadingContent = { Icon(Icons.Rounded.TravelExplore, null, tint = Color(0xFFFF6D00)) },
                     modifier = Modifier.clickable { mostrarMenuFoto = false; mostrarBuscadorAvatar = true }
                 )
@@ -868,8 +878,8 @@ fun PantallaMiPerfil(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = { mostrarBuscadorAvatar = false }) { Text("Cerrar") }
-                        Text("Elige tu avatar", fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { mostrarBuscadorAvatar = false }) { Text(textos.btnCerrar, color = Color.Gray) }
+                        Text(textos.tituloAvatar, fontWeight = FontWeight.Bold)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -880,7 +890,7 @@ fun PantallaMiPerfil(
                                                 if (GestorAuth.actualizarFotoPerfil(usuarioAuth!!.uid, url)) {
                                                     miPerfilSocial = miPerfilSocial?.copy(fotoPerfil = url)
                                                     mostrarBuscadorAvatar = false
-                                                    snackbarHostState.showSnackbar("Foto actualizada")
+                                                    snackbarHostState.showSnackbar(textos.msgFotoExito)
                                                 }
                                             }
                                         }
@@ -888,7 +898,7 @@ fun PantallaMiPerfil(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
-                        ) { Text("GUARDAR") }
+                        ) { Text(textos.btnGuardar, fontWeight = FontWeight.Bold) }
                     }
                     WebView(state = webViewState, navigator = navigator, modifier = Modifier.fillMaxSize())
                 }
@@ -900,12 +910,12 @@ fun PantallaMiPerfil(
         val esColaboracion = coleccionParaBorrar!!.esColaboracion
         AlertDialog(
             onDismissRequest = { coleccionParaBorrar = null },
-            title = { Text(if (esColaboracion) "¿Abandonar colaboración?" else "¿Eliminar colección?") },
+            title = { Text(if (esColaboracion) textos.tituloAbandonar else textos.tituloEliminarCol) },
             text = {
                 if (esColaboracion) {
-                    Text("¿Seguro que quieres dejar de colaborar en '${coleccionParaBorrar?.nombre}'? Perderás el acceso a la lista, pero el creador conservará los cambios que hayas hecho.")
+                    Text("${textos.descAbandonar1}${coleccionParaBorrar?.nombre}${textos.descAbandonar2}")
                 } else {
-                    Text("¿Estás seguro de que quieres borrar '${coleccionParaBorrar?.nombre}' de la nube? No se puede deshacer.")
+                    Text(textos.descEliminarCol)
                 }
             },
             confirmButton = {
@@ -925,17 +935,17 @@ fun PantallaMiPerfil(
                         }
                     }
                     coleccionParaBorrar = null
-                }) { Text(if (esColaboracion) "ABANDONAR" else "ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) }
+                }) { Text(if (esColaboracion) textos.btnAbandonar else textos.btnEliminar, color = Color.Red, fontWeight = FontWeight.Bold) }
             },
-            dismissButton = { TextButton(onClick = { coleccionParaBorrar = null }) { Text("CANCELAR", color = Color.Gray) } }
+            dismissButton = { TextButton(onClick = { coleccionParaBorrar = null }) { Text(textos.btnCancelar, color = Color.Gray) } }
         )
     }
 
     if (mostrarDialogoCerrar) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoCerrar = false },
-            title = { Text("¿Cerrar sesión?") },
-            text = { Text("Se borrarán los datos temporales del dispositivo. Tus listas seguirán en la nube.") },
+            title = { Text(textos.tituloCerrar) },
+            text = { Text(textos.descCerrar) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -945,17 +955,17 @@ fun PantallaMiPerfil(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
-                ) { Text("CERRAR SESIÓN") }
+                ) { Text(textos.btnCerrarSesion) }
             },
-            dismissButton = { TextButton(onClick = { mostrarDialogoCerrar = false }) { Text("CANCELAR", color = Color.Gray) } }
+            dismissButton = { TextButton(onClick = { mostrarDialogoCerrar = false }) { Text(textos.btnCancelar, color = Color.Gray) } }
         )
     }
 
     if (mostrarDialogoBorrar) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoBorrar = false },
-            title = { Text("⚠️ ELIMINAR CUENTA", color = Color.Red) },
-            text = { Text("Acción IRREVERSIBLE. Se borrarán tus listas, tu nombre y tu progreso para siempre.") },
+            title = { Text(textos.tituloEliminar, color = Color.Red) },
+            text = { Text(textos.descEliminar) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -971,16 +981,16 @@ fun PantallaMiPerfil(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                ) { Text("BORRAR TODO", fontWeight = FontWeight.Bold) }
+                ) { Text(textos.btnBorrarTodo, fontWeight = FontWeight.Bold) }
             },
-            dismissButton = { TextButton(onClick = { mostrarDialogoBorrar = false }) { Text("CANCELAR", color = Color.Gray) } }
+            dismissButton = { TextButton(onClick = { mostrarDialogoBorrar = false }) { Text(textos.btnCancelar, color = Color.Gray) } }
         )
     }
 
     if (mostrarDialogoNombre) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("Nombre de investigador") },
+            title = { Text(textos.tituloNombre) },
             text = {
                 OutlinedTextField(
                     value = nombreUsuarioInput,
@@ -989,12 +999,12 @@ fun PantallaMiPerfil(
                     isError = errorNombre.isNotEmpty(),
                     supportingText = { if (errorNombre.isNotEmpty()) Text(errorNombre) },
                     shape = RoundedCornerShape(12.dp),
-                    label = { Text("Tu apodo único") })
+                    label = { Text(textos.labelApodo) })
             },
             confirmButton = {
                 Button(onClick = {
                     scope.launch {
-                        if (nombreUsuarioInput.length < 3) { errorNombre = "Mínimo 3 letras"; return@launch }
+                        if (nombreUsuarioInput.length < 3) { errorNombre = textos.errorMinLetras; return@launch }
                         cargandoAuth = true
                         if (GestorAuth.registrarNombreUsuario(nombreUsuarioInput)) {
                             nombreUsuarioReal = nombreUsuarioInput
@@ -1003,16 +1013,16 @@ fun PantallaMiPerfil(
                                 mostrarDialogoMigracion = true
                             } else {
                                 GestorDatos.descargarDatosNube(usuarioAuth!!.uid)
-                                snackbarHostState.showSnackbar("¡Bienvenido @$nombreUsuarioReal!")
+                                snackbarHostState.showSnackbar("${textos.msgBienvenido} @$nombreUsuarioReal!")
                                 estadoPantalla = "PERFIL"
                                 clicEnIniciarSesion = false
                             }
                         } else {
-                            errorNombre = "Nombre en uso"
+                            errorNombre = textos.errorNombreUso
                         }
                         cargandoAuth = false
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text("CONFIRMAR") }
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text(textos.btnConfirmar) }
             }
         )
     }
@@ -1020,10 +1030,10 @@ fun PantallaMiPerfil(
     if (mostrarDialogoMigracion) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("¿Guardar listas locales?") },
+            title = { Text(textos.tituloMigracion) },
             text = {
                 Column {
-                    Text("Tienes listas en este móvil. ¿Quieres subirlas a tu cuenta de Google?", color = Color.Gray, fontSize = 14.sp)
+                    Text(textos.descMigracion, color = Color.Gray, fontSize = 14.sp)
                     Spacer(Modifier.height(16.dp))
                     LazyColumn(Modifier.heightIn(max = 200.dp)) {
                         items(listasLocalesTemp) { coleccion ->
@@ -1045,18 +1055,15 @@ fun PantallaMiPerfil(
                         cargandoAuth = true
                         listasSeleccionadas.forEach { GestorDatos.subirColeccionNube(usuarioAuth!!.uid, it) }
                         GestorDatos.subirJugadoresNube(usuarioAuth!!.uid)
-
-                        // 👇 NUEVA LÍNEA: Subir también los checkpoints al confirmar
                         GestorDatos.subirCheckpointsNube(usuarioAuth!!.uid)
-
                         GestorDatos.descargarDatosNube(usuarioAuth!!.uid)
                         mostrarDialogoMigracion = false
-                        snackbarHostState.showSnackbar("¡Todo sincronizado!")
+                        snackbarHostState.showSnackbar(textos.msgSincronizado)
                         estadoPantalla = "PERFIL"
                         clicEnIniciarSesion = false
                         cargandoAuth = false
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text("GUARDAR") }
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) { Text(textos.btnGuardar) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -1066,7 +1073,7 @@ fun PantallaMiPerfil(
                         estadoPantalla = "PERFIL"
                         clicEnIniciarSesion = false
                     }
-                }) { Text("DESCARTAR LOCALES", color = Color.Gray) }
+                }) { Text(textos.btnDescartar, color = Color.Gray) }
             }
         )
     }
@@ -1074,14 +1081,13 @@ fun PantallaMiPerfil(
     if (mostrarDialogoDescripcion) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoDescripcion = false },
-            title = { Text("Sobre mí") },
+            title = { Text(textos.tituloSobreMi) },
             text = {
                 OutlinedTextField(
                     value = inputDescripcion,
-                    // Limitamos a 300 caracteres exactos
                     onValueChange = { if (it.length <= 300) inputDescripcion = it },
                     modifier = Modifier.fillMaxWidth().height(140.dp),
-                    placeholder = { Text("¿Qué te gusta hacer? ¿Qué listas sueles crear?...") },
+                    placeholder = { Text(textos.placeholderSobreMi) },
                     supportingText = { Text("${inputDescripcion.length}/300", textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) }
                 )
             },
@@ -1092,16 +1098,16 @@ fun PantallaMiPerfil(
                             if (GestorAuth.actualizarDescripcionPerfil(uid, inputDescripcion)) {
                                 miPerfilSocial = miPerfilSocial?.copy(descripcion = inputDescripcion)
                                 mostrarDialogoDescripcion = false
-                                snackbarHostState.showSnackbar("Descripción actualizada")
+                                snackbarHostState.showSnackbar(textos.msgDescExito)
                             }
                         }
                     }
                 }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) {
-                    Text("GUARDAR")
+                    Text(textos.btnGuardar)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarDialogoDescripcion = false }) { Text("CANCELAR", color = Color.Gray) }
+                TextButton(onClick = { mostrarDialogoDescripcion = false }) { Text(textos.btnCancelar, color = Color.Gray) }
             }
         )
     }
@@ -1123,7 +1129,8 @@ fun ColumnaStats(valor: String, etiqueta: String, blanco: Boolean = false, onCli
 @Composable
 fun TarjetaColeccionPerfil(
     coleccion: ColeccionGuardada,
-    tienePendientes: Boolean, // 👇 NUEVO: Parámetro para saber si hay invitados esperando
+    tienePendientes: Boolean,
+    textos: TextosPerfil,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
     onPlay: () -> Unit,
@@ -1148,10 +1155,10 @@ fun TarjetaColeccionPerfil(
 
                         Icon(iconVector, null, modifier = Modifier.size(12.dp), tint = iconColor)
                         Spacer(Modifier.width(4.dp))
-                        Text(if (coleccion.esColaboracion) "Colaborativa" else if (coleccion.esPublica) "Pública" else "Privada", fontSize = 10.sp, color = Color.Gray)
+                        Text(if (coleccion.esColaboracion) textos.etiquetaColaborativa else if (coleccion.esPublica) textos.etiquetaPublica else textos.etiquetaPrivada, fontSize = 10.sp, color = Color.Gray)
 
                         Spacer(Modifier.width(8.dp))
-                        Text("• $totalPalabras pal.", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text("• $totalPalabras ${textos.pal}", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                     }
                 }
                 if (coleccion.esPublica || coleccion.esColaboracion) {
@@ -1163,7 +1170,6 @@ fun TarjetaColeccionPerfil(
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
 
-                // 👇 NUEVO: Mostrar gestionar si hay colaboradores activos O gente pendiente
                 if (coleccion.colaboradores.isNotEmpty() || tienePendientes) {
                     IconButton(onClick = onManageColabs) {
                         Icon(Icons.Rounded.ManageAccounts, null, tint = Color(0xFF00897B), modifier = Modifier.size(20.dp))
@@ -1176,9 +1182,7 @@ fun TarjetaColeccionPerfil(
                     }
                 }
 
-                // Asegúrate de importar androidx.compose.material.icons.rounded.ExitToApp arriba del todo
                 IconButton(onClick = onDelete) {
-                    // 👇 CAMBIO: Icono dinámico también en la tarjeta del perfil
                     Icon(
                         imageVector = if (coleccion.esColaboracion) Icons.Rounded.ExitToApp else Icons.Rounded.Delete,
                         contentDescription = null,

@@ -21,6 +21,8 @@ import kotlinx.coroutines.launch
 
 // Importamos todos los datos necesarios
 import org.example.project.Datos.*
+import org.example.project.Datos.TextosTraducidos.TextosApp
+import org.example.project.Datos.TextosTraducidos.obtenerTextosApp
 import org.example.project.PantallaMiPerfil
 
 enum class PantallaNavegacion {
@@ -88,6 +90,11 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
 
     val pasoTutorial = GestorDatos.pasoTutorialActual
 
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textosApp = obtenerTextosApp(idiomaActual)
+    // -------------------------
+
     LaunchedEffect(usuarioAuth, pantallaActual) {
         if (usuarioAuth != null) {
             val pendientes = GestorAuth.obtenerInvitacionesPendientes(usuarioAuth!!.uid)
@@ -141,6 +148,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                         ColorAcentuationLine()
                         MenuInferiorClavado(
                             pantallaSeleccionada = pantallaActual,
+                            textos = textosApp,
                             onPantallaCambiada = { nuevaPantalla ->
                                 if (pasoTutorial == 99 || pasoTutorial == 0 || pasoTutorial == 8) {
                                     pantallaActual = nuevaPantalla
@@ -305,11 +313,11 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
             }
         }
 
-        // CAPA DEL TUTORIAL MEJORADA
         if (pasoTutorial != 99) {
             TutorialOverlay(
                 paso = pasoTutorial,
                 pantallaActual = pantallaActual,
+                textos = textosApp,
                 onOmitir = { GestorDatos.terminarTutorial() },
                 onSiguiente = { GestorDatos.avanzarTutorial(pasoTutorial + 1) }
             )
@@ -320,14 +328,14 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
         AlertDialog(
             onDismissRequest = { },
             icon = { Icon(Icons.Rounded.Handshake, contentDescription = null, tint = Color(0xFF18C1A8)) },
-            title = { Text("¡Nueva Colaboración!") },
+            title = { Text(textosApp.colabTitulo) },
             text = {
                 if (procesandoInvitacion) {
                     Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = Color(0xFF18C1A8))
                     }
                 } else {
-                    Text("El investigador @${invitacionPendiente?.nombreEmisor} quiere que le ayudes a rellenar su lista '${invitacionPendiente?.nombreLista}'.\n\nSi aceptas, podrás editarla y aparecerá en tu biblioteca como propia.")
+                    Text("${textosApp.colabDesc1}${invitacionPendiente?.nombreEmisor}${textosApp.colabDesc2}${invitacionPendiente?.nombreLista}${textosApp.colabDesc3}")
                 }
             },
             confirmButton = {
@@ -338,7 +346,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 procesandoInvitacion = true
                                 val exito = GestorAuth.responderInvitacion(invitacionPendiente!!, true)
                                 if (exito) {
-                                    snackbarHostState.showSnackbar("¡Ahora eres colaborador!")
+                                    snackbarHostState.showSnackbar(textosApp.colabExito)
                                     usuarioAuth?.uid?.let { GestorDatos.descargarDatosNube(it) }
                                 }
                                 invitacionPendiente = null
@@ -346,12 +354,12 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
-                    ) { Text("ACEPTAR") }
+                    ) { Text(textosApp.colabAceptar) }
                 }
             },
             dismissButton = {
                 if (!procesandoInvitacion) {
-                    TextButton(onClick = { scope.launch { procesandoInvitacion = true; GestorAuth.responderInvitacion(invitacionPendiente!!, false); invitacionPendiente = null; procesandoInvitacion = false } }) { Text("RECHAZAR", color = Color.Gray) }
+                    TextButton(onClick = { scope.launch { procesandoInvitacion = true; GestorAuth.responderInvitacion(invitacionPendiente!!, false); invitacionPendiente = null; procesandoInvitacion = false } }) { Text(textosApp.colabRechazar, color = Color.Gray) }
                 }
             }
         )
@@ -368,13 +376,13 @@ fun ColorAcentuationLine() {
 }
 
 @Composable
-fun MenuInferiorClavado(pantallaSeleccionada: PantallaNavegacion, onPantallaCambiada: (PantallaNavegacion) -> Unit) {
+fun MenuInferiorClavado(pantallaSeleccionada: PantallaNavegacion, textos: TextosApp, onPantallaCambiada: (PantallaNavegacion) -> Unit) {
     NavigationBar(containerColor = Color(0xFF121212), contentColor = Color.White, modifier = Modifier.padding(top = 2.dp)) {
-        NavigationBarItem(icon = { Icon(Icons.Rounded.Home, contentDescription = "Inicio") }, label = { Text("INICIO", fontWeight = FontWeight.Bold, fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.INICIO, onClick = { onPantallaCambiada(PantallaNavegacion.INICIO) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
-        NavigationBarItem(icon = { Icon(Icons.Rounded.ViewList, contentDescription = "Biblioteca") }, label = { Text("BIBLIOTECA", fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.BIBLIOTECA, onClick = { onPantallaCambiada(PantallaNavegacion.BIBLIOTECA) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
+        NavigationBarItem(icon = { Icon(Icons.Rounded.Home, contentDescription = null) }, label = { Text(textos.menuInicio, fontWeight = FontWeight.Bold, fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.INICIO, onClick = { onPantallaCambiada(PantallaNavegacion.INICIO) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
+        NavigationBarItem(icon = { Icon(Icons.Rounded.ViewList, contentDescription = null) }, label = { Text(textos.menuBiblioteca, fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.BIBLIOTECA, onClick = { onPantallaCambiada(PantallaNavegacion.BIBLIOTECA) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
         NavigationBarItem(icon = {}, label = { }, selected = false, onClick = { }, enabled = false)
-        NavigationBarItem(icon = { Icon(Icons.Rounded.Search, contentDescription = "Explorar") }, label = { Text("EXPLORAR", fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.EXPLORAR, onClick = { onPantallaCambiada(PantallaNavegacion.EXPLORAR) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
-        NavigationBarItem(icon = { Icon(Icons.Rounded.AccountCircle, contentDescription = "Perfil") }, label = { Text("PERFIL", fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.PERFIL, onClick = { onPantallaCambiada(PantallaNavegacion.PERFIL) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
+        NavigationBarItem(icon = { Icon(Icons.Rounded.Search, contentDescription = null) }, label = { Text(textos.menuExplorar, fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.EXPLORAR, onClick = { onPantallaCambiada(PantallaNavegacion.EXPLORAR) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
+        NavigationBarItem(icon = { Icon(Icons.Rounded.AccountCircle, contentDescription = null) }, label = { Text(textos.menuPerfil, fontSize = 10.sp) }, selected = pantallaSeleccionada == PantallaNavegacion.PERFIL, onClick = { onPantallaCambiada(PantallaNavegacion.PERFIL) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFFFF6D00), selectedTextColor = Color(0xFFFF6D00), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent))
     }
 }
 
@@ -387,6 +395,7 @@ fun PantallaEnConstruccion(nombre: String) {
 fun TutorialOverlay(
     paso: Int,
     pantallaActual: PantallaNavegacion,
+    textos: TextosApp,
     onOmitir: () -> Unit,
     onSiguiente: () -> Unit
 ) {
@@ -398,11 +407,10 @@ fun TutorialOverlay(
         val alineacion: Alignment
         var offsetY = 0.dp
 
-        // 👇 Ajustamos los offsetY para pegar más las tarjetas a los bordes y liberar el centro
         when (paso) {
             0, 8 -> { alineacion = Alignment.Center }
             1 -> { alineacion = Alignment.Center; offsetY = (-40).dp }
-            2 -> { alineacion = Alignment.BottomCenter; offsetY = 16.dp } // Bajamos la tarjeta del Taller
+            2 -> { alineacion = Alignment.BottomCenter; offsetY = 16.dp }
             3 -> { alineacion = Alignment.BottomCenter; offsetY = (-80).dp }
             4 -> {
                 if (pantallaActual == PantallaNavegacion.JUGADORES) {
@@ -410,10 +418,10 @@ fun TutorialOverlay(
                     offsetY = 0.dp
                 } else {
                     alineacion = Alignment.TopCenter
-                    offsetY = 50.dp // Subimos la tarjeta de Configuración
+                    offsetY = 50.dp
                 }
             }
-            5, 6, 7 -> { alineacion = Alignment.TopCenter; offsetY = 50.dp } // Subimos las tarjetas de Juego
+            5, 6, 7 -> { alineacion = Alignment.TopCenter; offsetY = 50.dp }
             else -> { alineacion = Alignment.Center }
         }
 
@@ -421,27 +429,26 @@ fun TutorialOverlay(
         val mensaje: String
         val textoBoton: String?
 
-        // 👇 Textos AÚN MÁS simplificados para reducir el alto de las tarjetas
         when (paso) {
-            0 -> { titulo = "🕵️ ¡Bienvenido!"; mensaje = "Unmask es la app definitiva para jugar al impostor. El secreto está en las listas: ¡crea las tuyas!"; textoBoton = "¡ENTENDIDO!" }
-            1 -> { titulo = "🆕 Crea tu lista"; mensaje = "Pulsa 'CREAR AHORA' o el '+' de abajo para empezar. Haremos una de prueba."; textoBoton = null }
-            2 -> { titulo = "📝 El Taller"; mensaje = "Ponle nombre y añade al menos 3 palabras con pistas para guardarla."; textoBoton = null }
-            3 -> { titulo = "📚 Tu Biblioteca"; mensaje = "¡Genial! Aquí están tus creaciones. Pulsa 'JUGAR' para ver cómo se configura."; textoBoton = null }
+            0 -> { titulo = textos.tut0Titulo; mensaje = textos.tut0Desc; textoBoton = textos.tut0Btn }
+            1 -> { titulo = textos.tut1Titulo; mensaje = textos.tut1Desc; textoBoton = null }
+            2 -> { titulo = textos.tut2Titulo; mensaje = textos.tut2Desc; textoBoton = null }
+            3 -> { titulo = textos.tut3Titulo; mensaje = textos.tut3Desc; textoBoton = null }
             4 -> {
                 if (pantallaActual == PantallaNavegacion.JUGADORES) {
-                    titulo = "👥 Añade amigos"
-                    mensaje = "Escribe sus nombres y pulsa '+'. Necesitas al menos 3 para jugar.\nLuego vuelve atrás."
+                    titulo = textos.tut4JugTitulo
+                    mensaje = textos.tut4JugDesc
                     textoBoton = null
                 } else {
-                    titulo = "⚙️ Ajustes de partida"
-                    mensaje = "Añade mínimo 3 jugadores arriba y ajusta las reglas.\n\n¡Inicia cuando estés listo!"
+                    titulo = textos.tut4ConfTitulo
+                    mensaje = textos.tut4ConfDesc
                     textoBoton = null
                 }
             }
-            5 -> { titulo = "🎭 Tu Rol"; mensaje = "Pasad el móvil. Deslizad la carta para ver si sois CIVIL o IMPOSTOR."; textoBoton = null }
-            6 -> { titulo = "🗣️ El Debate"; mensaje = "Hablad y usad las pistas para descubrir al impostor sin decir la palabra. ¡Votad al acabar!"; textoBoton = null }
-            7 -> { titulo = "🏆 Resultados"; mensaje = "Comprueba quién ha ganado. Pulsa 'FINALIZAR PARTIDA' abajo para terminar."; textoBoton = null }
-            8 -> { titulo = "🌎 Comunidad"; mensaje = "¡Ya sabes lo básico! En 'Explorar' puedes bajar listas de otros. ¡Inicia sesión y comparte!"; textoBoton = "FINALIZAR" }
+            5 -> { titulo = textos.tut5Titulo; mensaje = textos.tut5Desc; textoBoton = null }
+            6 -> { titulo = textos.tut6Titulo; mensaje = textos.tut6Desc; textoBoton = null }
+            7 -> { titulo = textos.tut7Titulo; mensaje = textos.tut7Desc; textoBoton = null }
+            8 -> { titulo = textos.tut8Titulo; mensaje = textos.tut8Desc; textoBoton = textos.tut8Btn }
             else -> { titulo = ""; mensaje = ""; textoBoton = null }
         }
 
@@ -461,7 +468,6 @@ fun TutorialOverlay(
                     border = BorderStroke(2.dp, Color(0xFF18C1A8))
                 ) {
                     Column(
-                        // Reducimos un poco el padding interno para ganar espacio vertical
                         modifier = Modifier.padding(top = 16.dp, start = 20.dp, end = 20.dp, bottom = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -490,7 +496,7 @@ fun TutorialOverlay(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Rounded.FastForward, contentDescription = null, tint = Color(0xFFFF3D00), modifier = Modifier.size(16.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("OMITIR TUTORIAL", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFFFF3D00))
+                                    Text(textos.tutOmitir, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = Color(0xFFFF3D00))
                                 }
                             }
                         }

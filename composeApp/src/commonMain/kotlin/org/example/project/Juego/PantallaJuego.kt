@@ -33,6 +33,8 @@ import org.example.project.Datos.*
 // 👇 IMPORTS PARA LA IMAGEN 👇
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import org.example.project.Datos.TextosTraducidos.TextosJuego
+import org.example.project.Datos.TextosTraducidos.obtenerTextosJuego
 
 enum class FaseJuego {
     REVELAR_ROLES, DEBATE, RESULTADOS
@@ -57,11 +59,14 @@ fun PantallaJuego(
     opciones: OpcionesJuego,
     onSalir: () -> Unit
 ) {
-    // 👇 NUEVO: Estado del tutorial
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosJuego(idiomaActual)
+    // -------------------------
+
     val pasoTutorial = GestorDatos.pasoTutorialActual
     var mostrarAvisoSalirTutorial by remember { mutableStateOf(false) }
 
-    // 👇 NUEVO: Bloqueamos el botón físico de atrás en Android durante el tutorial
     androidx.activity.compose.BackHandler(enabled = pasoTutorial in 5..7) {
         mostrarAvisoSalirTutorial = true
     }
@@ -149,14 +154,12 @@ fun PantallaJuego(
     var tiempoAdivinar by remember { mutableStateOf(15) }
     var textoBusquedaImpostor by remember { mutableStateOf("") }
 
-
     val usuarioAuth by GestorAuth.usuario.collectAsState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(GestorDatos.palabrasUsadasSesion.size) {
         if (opciones.sinRepeticiones && GestorDatos.checkpointActivoId != null) {
             usuarioAuth?.uid?.let { uid ->
-                // Sincronizamos con la nube automáticamente al empezar cada ronda
                 GestorDatos.subirCheckpointsNube(uid)
             }
         }
@@ -180,9 +183,8 @@ fun PantallaJuego(
                 tiempoRestante--
                 if (tiempoRestante <= 0) {
                     ganadores = "IMPOSTOR"
-                    mensajeVictoria = "¡Se agotó el tiempo! Los impostores han ganado por sigilo."
+                    mensajeVictoria = textos.msgTiempoAgotadoDebate
                     fase = FaseJuego.RESULTADOS
-                    // 👇 NUEVO: Avanzar tutorial al agotarse el tiempo
                     if (GestorDatos.pasoTutorialActual == 6) GestorDatos.avanzarTutorial(7)
                 }
             }
@@ -199,7 +201,7 @@ fun PantallaJuego(
             }
             if (tiempoAdivinar <= 0 && adivinandoPalabra) {
                 ganadores = "CIVILES"
-                mensajeVictoria = "¡Se agotó el tiempo! El impostor no logró adivinar la palabra."
+                mensajeVictoria = textos.msgTiempoAgotadoAdivinar
                 impostorDescubierto = false
                 adivinandoPalabra = false
             }
@@ -211,7 +213,6 @@ fun PantallaJuego(
         // CABECERA
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
-                // 👇 NUEVO: Impedimos salir usando el botón (X) si el tutorial está activo
                 if (pasoTutorial in 5..7) mostrarAvisoSalirTutorial = true
                 else onSalir()
             }) {
@@ -225,15 +226,14 @@ fun PantallaJuego(
                         val sec = (tiempoRestante % 60).toString().padStart(2, '0')
                         Text("$min:$sec", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (tiempoRestante < 30) Color.Red else Color.Black)
                     }
-                    Text(if (opciones.limiteRondas) "Ronda $rondaActual / ${opciones.rondas}" else "Ronda $rondaActual", fontWeight = FontWeight.Bold, color = Color(0xFFFF6D00))
+                    Text(if (opciones.limiteRondas) "${textos.txtRonda} $rondaActual / ${opciones.rondas}" else "${textos.txtRonda} $rondaActual", fontWeight = FontWeight.Bold, color = Color(0xFFFF6D00))
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.width(48.dp))
         }
 
-        // 👇 NUEVO: ESPACIADOR DINÁMICO PARA EL TUTORIAL 👇
-        // Esto empuja todo el juego hacia abajo para que el cartel del tutorial no lo tape
+        // ESPACIADOR DINÁMICO PARA EL TUTORIAL
         if (pasoTutorial in 5..7) {
             Spacer(modifier = Modifier.height(180.dp))
         }
@@ -248,32 +248,32 @@ fun PantallaJuego(
 
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(jugadorActual, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                    Text("Desliza para ver tu rol", color = Color.Gray)
+                    Text(textos.txtDesliza, color = Color.Gray)
 
                     Spacer(modifier = Modifier.height(32.dp))
 
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Color.White).border(2.dp, if(esImpostor) Color(0xFFFF3D00) else Color(0xFF18C1A8), RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "TEMA: ${coleccion.categoria.uppercase()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.Gray, letterSpacing = 2.sp)
+                                Text(text = "${textos.txtTema} ${coleccion.categoria.uppercase()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.Gray, letterSpacing = 2.sp)
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Text(text = if(esImpostor) "IMPOSTOR" else "CIVIL", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = if(esImpostor) Color(0xFFFF3D00) else Color(0xFF18C1A8))
+                                Text(text = if(esImpostor) textos.rolImpostor else textos.rolCivil, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = if(esImpostor) Color(0xFFFF3D00) else Color(0xFF18C1A8))
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 val textoGrupo = palabraElegida.nombreGrupo?.let { " [$it]" } ?: ""
 
                                 if (esImpostor) {
                                     if (opciones.pistaParaImpostor) {
-                                        Text("Pista: ${palabraElegida.pista}", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                        Text("${textos.txtPista} ${palabraElegida.pista}", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                     } else {
-                                        Text("¡No te descubras!", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                        Text(textos.txtNoTeDescubras, textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                                     }
                                 } else {
                                     palabraElegida.imagenUrl?.let { url ->
                                         KamelImage(resource = asyncPainterResource(url), contentDescription = "Imagen secreta", modifier = Modifier.size(160.dp).clip(RoundedCornerShape(16.dp)).border(2.dp, Color(0xFF18C1A8), RoundedCornerShape(16.dp)), contentScale = ContentScale.Fit)
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
-                                    Text("Palabra: ${palabraElegida.palabra}$textoGrupo", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                    Text("${textos.txtPalabra} ${palabraElegida.palabra}$textoGrupo", textAlign = TextAlign.Center, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -299,7 +299,6 @@ fun PantallaJuego(
                         onClick = {
                             if (esUltimo) {
                                 fase = FaseJuego.DEBATE
-                                // 👇 NUEVO: Avanzamos al paso 6 del tutorial
                                 if (pasoTutorial == 5) GestorDatos.avanzarTutorial(6)
                             } else {
                                 indicePase++
@@ -312,7 +311,7 @@ fun PantallaJuego(
                         colors = ButtonDefaults.buttonColors(containerColor = if (esUltimo) Color(0xFFFF6D00) else Color.Black, disabledContainerColor = Color.LightGray),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(text = if (!haMiradoActual) "MIRA TU ROL" else if (esUltimo) "COMENZAR" else "SIGUIENTE", fontWeight = FontWeight.Bold, color = if (haMiradoActual) Color.White else Color.DarkGray)
+                        Text(text = if (!haMiradoActual) textos.btnMiraRol else if (esUltimo) textos.btnComenzar else textos.btnSiguiente, fontWeight = FontWeight.Bold, color = if (haMiradoActual) Color.White else Color.DarkGray)
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                 }
@@ -322,7 +321,7 @@ fun PantallaJuego(
                 val jugadorHablando = ordenHablar[indiceHablando]
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                     Column(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text("Turno de hablar:", color = Color.Gray)
+                        Text(textos.txtTurnoHablar, color = Color.Gray)
                         Text(jugadorHablando, fontSize = 42.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     }
                     Button(onClick = {
@@ -331,18 +330,17 @@ fun PantallaJuego(
                             rondaActual++
                             if (opciones.limiteRondas && rondaActual > opciones.rondas) {
                                 ganadores = "IMPOSTOR"
-                                mensajeVictoria = "¡Límite de rondas alcanzado! Los impostores ganan."
+                                mensajeVictoria = textos.msgLimiteRondas
                                 fase = FaseJuego.RESULTADOS
-                                // 👇 NUEVO: Avanzar tutorial al límite de rondas
                                 if (GestorDatos.pasoTutorialActual == 6) GestorDatos.avanzarTutorial(7)
                             }
                         }
                     }, modifier = Modifier.fillMaxWidth().height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Black), shape = RoundedCornerShape(16.dp)) {
-                        Text("SIGUIENTE HABLANTE", fontWeight = FontWeight.Bold)
+                        Text(textos.btnSiguienteHablante, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedButton(onClick = { mostrarDialogoVotar = true }, modifier = Modifier.fillMaxWidth().height(60.dp), border = BorderStroke(2.dp, Color(0xFFFF3D00)), shape = RoundedCornerShape(16.dp)) {
-                        Text("VOTAR IMPOSTOR", color = Color(0xFFFF3D00), fontWeight = FontWeight.Bold)
+                        Text(textos.btnVotarImpostor, color = Color(0xFFFF3D00), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -351,35 +349,35 @@ fun PantallaJuego(
                 if (impostorDescubierto && !adivinandoPalabra) {
                     Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                         Column(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Text("¡IMPOSTOR DESCUBIERTO!", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFF6D00), textAlign = TextAlign.Center)
+                            Text(textos.tituloDescubierto, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFF6D00), textAlign = TextAlign.Center)
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(mensajeVictoria, textAlign = TextAlign.Center, fontSize = 18.sp)
                             Spacer(modifier = Modifier.height(24.dp))
-                            Text("Pero espera... El impostor tiene una última oportunidad para robar la victoria si adivina la palabra secreta.", textAlign = TextAlign.Center, fontSize = 16.sp, color = Color.Gray)
+                            Text(textos.descDescubierto, textAlign = TextAlign.Center, fontSize = 16.sp, color = Color.Gray)
                         }
                         Button(onClick = { adivinandoPalabra = true }, modifier = Modifier.fillMaxWidth().height(80.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Black), shape = RoundedCornerShape(16.dp)) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("INTENTAR ADIVINAR", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                Text("¡Cuidado! Solo tendrás 15 segundos", color = Color(0xFFFF6D00), fontSize = 12.sp)
+                                Text(textos.btnIntentarAdivinar, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(textos.txtCuidado15s, color = Color(0xFFFF6D00), fontSize = 12.sp)
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedButton(onClick = { ganadores = "CIVILES"; mensajeVictoria = "El impostor se ha rendido. ¡Victoria total para los civiles!"; impostorDescubierto = false }, modifier = Modifier.fillMaxWidth().height(60.dp), border = BorderStroke(2.dp, Color.Gray), shape = RoundedCornerShape(16.dp)) {
-                            Text("RENDIRSE", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        OutlinedButton(onClick = { ganadores = "CIVILES"; mensajeVictoria = textos.msgRendido; impostorDescubierto = false }, modifier = Modifier.fillMaxWidth().height(60.dp), border = BorderStroke(2.dp, Color.Gray), shape = RoundedCornerShape(16.dp)) {
+                            Text(textos.btnRendirse, color = Color.Gray, fontWeight = FontWeight.Bold)
                         }
                     }
                 } else if (adivinandoPalabra) {
                     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("¡RÁPIDO!", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text(textos.txtRapido, color = Color.Gray, fontWeight = FontWeight.Bold)
                         Text("00:${tiempoAdivinar.toString().padStart(2, '0')}", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = if(tiempoAdivinar <= 5) Color.Red else Color.Black)
                         Spacer(modifier = Modifier.height(16.dp))
-                        OutlinedTextField(value = textoBusquedaImpostor, onValueChange = { textoBusquedaImpostor = it }, placeholder = { Text("Buscar palabra...") }, leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp))
+                        OutlinedTextField(value = textoBusquedaImpostor, onValueChange = { textoBusquedaImpostor = it }, placeholder = { Text(textos.placeholderBuscar) }, leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp))
                         Spacer(modifier = Modifier.height(16.dp))
                         val palabrasFiltradasImpostor = todasLasPalabrasStrings.filter { it.contains(textoBusquedaImpostor, ignoreCase = true) }
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(palabrasFiltradasImpostor) { palabraOpcion ->
                                 Button(onClick = {
-                                    if (palabraOpcion.equals(palabraElegida.palabra, ignoreCase = true)) { ganadores = "IMPOSTOR"; mensajeVictoria = "¡Increíble! El impostor adivinó la palabra ($palabraOpcion) y ha robado la victoria." } else { ganadores = "CIVILES"; mensajeVictoria = "El impostor pensó que era '$palabraOpcion' y falló. ¡Los civiles ganan!" }
+                                    if (palabraOpcion.equals(palabraElegida.palabra, ignoreCase = true)) { ganadores = "IMPOSTOR"; mensajeVictoria = "${textos.msgImpostorAdivina1}$palabraOpcion${textos.msgImpostorAdivina2}" } else { ganadores = "CIVILES"; mensajeVictoria = "${textos.msgImpostorFalla1}$palabraOpcion${textos.msgImpostorFalla2}" }
                                     adivinandoPalabra = false; impostorDescubierto = false; textoBusquedaImpostor = ""
                                 }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.White), elevation = ButtonDefaults.buttonElevation(2.dp), shape = RoundedCornerShape(12.dp)) { Text(palabraOpcion, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
                             }
@@ -388,8 +386,8 @@ fun PantallaJuego(
                 } else {
                     Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                         Column(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Text("VICTORIA PARA", fontSize = 20.sp, color = Color.Gray)
-                            Text(text = ganadores, fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = if(ganadores == "CIVILES") Color(0xFF18C1A8) else Color(0xFFFF3D00))
+                            Text(textos.txtVictoriaPara, fontSize = 20.sp, color = Color.Gray)
+                            Text(text = if(ganadores == "CIVILES") textos.txtVictoriaCiviles else textos.txtVictoriaImpostores, fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = if(ganadores == "CIVILES") Color(0xFF18C1A8) else Color(0xFFFF3D00))
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(mensajeVictoria, textAlign = TextAlign.Center, fontSize = 16.sp)
                             Spacer(modifier = Modifier.height(24.dp))
@@ -401,16 +399,15 @@ fun PantallaJuego(
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
                                     val textoGrupo = palabraElegida.nombreGrupo?.let { " [$it]" } ?: ""
-                                    Text(text = "Palabra secreta:\n${palabraElegida.palabra}$textoGrupo", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Text(text = "${textos.txtPalabraSecreta}${palabraElegida.palabra}$textoGrupo", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Text(text = "Impostores:\n${impostores.joinToString(", ")}", color = Color.Gray, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                                    Text(text = "${textos.txtImpostores}${impostores.joinToString(", ")}", color = Color.Gray, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                                 }
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = onSalir, modifier = Modifier.fillMaxWidth().height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Black)) {
-                            // 👇 NUEVO: Destacar el botón si estamos en el último paso
-                            Text(if (pasoTutorial == 7) "FINALIZAR PARTIDA DE PRUEBA" else "VOLVER AL MENÚ", fontWeight = FontWeight.Bold)
+                            Text(if (pasoTutorial == 7) textos.btnFinalizarPrueba else textos.btnVolverMenu, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -420,35 +417,34 @@ fun PantallaJuego(
 
     if (mostrarDialogoVotar) {
         DialogoVotacionFinal(
+            textos = textos,
             jugadores = jugadores,
             impostores = impostores,
             onVotoConfirmado = { haGanadoCivil, nombreExpulsado ->
                 mostrarDialogoVotar = false
                 if (haGanadoCivil) {
                     impostorDescubierto = true
-                    mensajeVictoria = "Habéis atrapado a $nombreExpulsado."
+                    mensajeVictoria = "${textos.msgAtrapado}$nombreExpulsado."
                 } else {
                     ganadores = "IMPOSTOR"
-                    mensajeVictoria = "¡ERROR! $nombreExpulsado era inocente. Los impostores ganan por votación errónea."
+                    mensajeVictoria = "${textos.msgErrorInocente1}$nombreExpulsado${textos.msgErrorInocente2}"
                     impostorDescubierto = false
                 }
                 fase = FaseJuego.RESULTADOS
-                // 👇 NUEVO: Avanzar tutorial al paso de resultados
                 if (GestorDatos.pasoTutorialActual == 6) GestorDatos.avanzarTutorial(7)
             },
             onVolver = { mostrarDialogoVotar = false }
         )
     }
 
-    // 👇 NUEVO: Dialogo protector por si intentas salir en medio del tutorial
     if (mostrarAvisoSalirTutorial) {
         AlertDialog(
             onDismissRequest = { mostrarAvisoSalirTutorial = false },
-            title = { Text("¡Termina la partida!") },
-            text = { Text("Estás en la recta final del tutorial. Termina la partida de prueba para ver cómo funciona todo el ciclo, o pulsa 'OMITIR TUTORIAL' arriba.") },
+            title = { Text(textos.dialogoSalirTutTitulo) },
+            text = { Text(textos.dialogoSalirTutDesc) },
             confirmButton = {
                 TextButton(onClick = { mostrarAvisoSalirTutorial = false }) {
-                    Text("ENTENDIDO", color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                    Text(textos.btnEntendido, color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -457,6 +453,7 @@ fun PantallaJuego(
 
 @Composable
 fun DialogoVotacionFinal(
+    textos: TextosJuego,
     jugadores: List<String>,
     impostores: Set<String>,
     onVotoConfirmado: (Boolean, String) -> Unit,
@@ -471,8 +468,8 @@ fun DialogoVotacionFinal(
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("¿Quién es el impostor?", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("Si falláis, perderéis la partida.", fontSize = 14.sp, color = Color.Red)
+                Text(textos.tituloVotar, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(textos.descVotar, fontSize = 14.sp, color = Color.Red)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -502,7 +499,7 @@ fun DialogoVotacionFinal(
                         modifier = Modifier.weight(1f).height(56.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("VOLVER", color = Color.Gray)
+                        Text(textos.btnVolver, color = Color.Gray)
                     }
 
                     Button(
@@ -517,7 +514,7 @@ fun DialogoVotacionFinal(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
                     ) {
-                        Text("REVELAR", fontWeight = FontWeight.Bold)
+                        Text(textos.btnRevelar, fontWeight = FontWeight.Bold)
                     }
                 }
             }

@@ -1,16 +1,16 @@
 package org.example.project.Datos
 
-import ColeccionPredefinida
-import ElementoPredefinido
+
 import androidx.compose.runtime.mutableStateListOf
 import com.russhwolf.settings.Settings
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.example.project.Datos.GestorAuth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import org.example.project.Datos.ListasPredeterminadas.ColeccionPredefinida
+import org.example.project.Datos.ListasPredeterminadas.ElementoPredefinido
 
 @Serializable
 data class OpcionesJuego(

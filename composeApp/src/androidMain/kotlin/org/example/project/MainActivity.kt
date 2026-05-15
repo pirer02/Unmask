@@ -77,9 +77,9 @@ class MainActivity : ComponentActivity() {
                     lifecycleScope.launch {
                         GestorAuth.actualizarUsuarioActual()
                     }
-                    Toast.makeText(this, "¡Bienvenido/a!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "\uD83D\uDC4D", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this, "Error conectando con la base de datos", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Error witch data base", Toast.LENGTH_SHORT).show()
                 }
             }
     }

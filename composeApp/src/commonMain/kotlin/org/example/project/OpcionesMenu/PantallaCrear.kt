@@ -1,5 +1,4 @@
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +36,7 @@ import com.multiplatform.webview.web.rememberWebViewState
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import org.example.project.Datos.TextosTraducidos.obtenerTextosCrear
 
 // --- PEQUEÑA HERRAMIENTA PARA MAYÚSCULAS ---
 fun String.capitalizarPrimeraCrear(): String {
@@ -82,6 +82,11 @@ fun PantallaCrear(
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    // --- LÓGICA DE IDIOMAS ---
+    val idiomaActual by GestorIdiomas.idiomaActual.collectAsState()
+    val textos = obtenerTextosCrear(idiomaActual)
+    // -------------------------
+
     val usuarioActual by GestorAuth.usuario.collectAsState()
 
     var estaCargando by remember { mutableStateOf(true) }
@@ -125,7 +130,7 @@ fun PantallaCrear(
                     val pLimpia = el.data.palabra.trim().lowercase()
 
                     if (pLimpia.isNotEmpty() && !palabrasVistas.add(pLimpia)) {
-                        el.data.errorPalabra = true; el.data.mensajeErrorPalabra = "Repetida"
+                        el.data.errorPalabra = true; el.data.mensajeErrorPalabra = textos.errorRepetida
                     }
                 }
                 is ElementoUI.Conjunto -> {
@@ -134,7 +139,7 @@ fun PantallaCrear(
                         val pLimpia = p.palabra.trim().lowercase()
 
                         if (pLimpia.isNotEmpty() && !palabrasVistas.add(pLimpia)) {
-                            p.errorPalabra = true; p.mensajeErrorPalabra = "Repetida"
+                            p.errorPalabra = true; p.mensajeErrorPalabra = textos.errorRepetida
                         }
                     }
                 }
@@ -213,7 +218,7 @@ fun PantallaCrear(
             aplicarYFusionarElementos(nuevosElementos)
             validarDuplicadosGlobales()
             mostrarDialogoImportar = false; textoAImportar = ""
-            coroutineScope.launch { snackbarHostState.showSnackbar("Elementos importados con éxito") }
+            coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgImportExito) }
         }
     }
 
@@ -256,9 +261,8 @@ fun PantallaCrear(
         estaCargando = false
     }
 
-    // 👇 NUEVO: Bloquear el botón físico de atrás en Android si el tutorial está en el paso 2
     androidx.activity.compose.BackHandler(enabled = GestorDatos.pasoTutorialActual == 2) {
-        coroutineScope.launch { snackbarHostState.showSnackbar("Para salir, pulsa 'Omitir Tutorial' arriba a la derecha.") }
+        coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgSalirTutorial) }
     }
 
     val opcionesTeclado = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
@@ -274,7 +278,7 @@ fun PantallaCrear(
                     modifier = Modifier.size(64.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Preparando el taller...", color = Color.Gray, fontWeight = FontWeight.Bold)
+                Text(textos.cargandoTaller, color = Color.Gray, fontWeight = FontWeight.Bold)
             }
         }
         return
@@ -286,9 +290,8 @@ fun PantallaCrear(
             Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {
-                        // 👇 NUEVO: Comprobamos si está en el paso del tutorial para que no se escape
                         if (GestorDatos.pasoTutorialActual == 2) {
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Guarda tu lista con 3 palabras para continuar.") }
+                            coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgGuardarTutorial) }
                         } else {
                             onVolver()
                         }
@@ -299,7 +302,7 @@ fun PantallaCrear(
                         )
                     }
                     Text(
-                        if (coleccionParaEditar != null) "Editar Lista" else "Nueva Lista",
+                        if (coleccionParaEditar != null) textos.tituloEditar else textos.tituloNueva,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -331,7 +334,7 @@ fun PantallaCrear(
                         onClick = {
                             var hayError = false
                             var primerIndiceError = -1
-                            var totalPalabrasRellenas = 0 // 👇 NUEVO: Contador de palabras para el tutorial
+                            var totalPalabrasRellenas = 0
 
                             if (nombreColeccion.trim().isBlank()) {
                                 errorNombreCol = true; hayError = true; primerIndiceError = 0
@@ -346,7 +349,6 @@ fun PantallaCrear(
                                 val indiceRealEnLista = index + 1
                                 when (el) {
                                     is ElementoUI.Individual -> {
-                                        // Sumamos al contador si ambos campos están llenos
                                         if (el.data.palabra.isNotBlank() && el.data.pista.isNotBlank()) totalPalabrasRellenas++
 
                                         if (el.data.palabra.isBlank() || el.data.pista.isBlank() || el.data.errorPalabra || el.data.errorPista) {
@@ -366,7 +368,6 @@ fun PantallaCrear(
                                                 indiceRealEnLista
                                         }
                                         el.palabras.forEach { p ->
-                                            // Sumamos al contador si ambos campos están llenos
                                             if (p.palabra.isNotBlank() && p.pista.isNotBlank()) totalPalabrasRellenas++
 
                                             if (p.palabra.isBlank() || p.pista.isBlank() || p.errorPalabra || p.errorPista) {
@@ -381,16 +382,15 @@ fun PantallaCrear(
                                 }
                             }
 
-                            // 👇 NUEVA LÓGICA DEL TUTORIAL: Exigir mínimo 3 palabras
                             if (GestorDatos.pasoTutorialActual == 2 && totalPalabrasRellenas < 3) {
-                                coroutineScope.launch { snackbarHostState.showSnackbar("Para el tutorial, añade al menos 3 palabras de prueba.") }
-                                return@Button // Cortamos la ejecución, no se guarda aún
+                                coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgMinimoPalabras) }
+                                return@Button
                             }
 
                             if (hayError) {
                                 coroutineScope.launch {
                                     listState.animateScrollToItem(primerIndiceError.coerceAtLeast(0))
-                                    snackbarHostState.showSnackbar("Faltan campos por rellenar o hay errores")
+                                    snackbarHostState.showSnackbar(textos.msgFaltanCampos)
                                 }
                             } else {
                                 coroutineScope.launch {
@@ -453,7 +453,7 @@ fun PantallaCrear(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            "GUARDAR",
+                            textos.btnGuardar,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false
@@ -464,7 +464,7 @@ fun PantallaCrear(
                 AnimatedVisibility(visible = mostrandoBuscador) {
                     OutlinedTextField(
                         value = textoBusqueda, onValueChange = { textoBusqueda = it },
-                        placeholder = { Text("Buscar palabra, pista o grupo...") },
+                        placeholder = { Text(textos.placeholderBuscar) },
                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                         trailingIcon = {
                             if (textoBusqueda.isNotEmpty()) IconButton(onClick = {
@@ -495,7 +495,7 @@ fun PantallaCrear(
                                     onValueChange = {
                                         nombreColeccion = it; errorNombreCol = false
                                     },
-                                    label = { Text("Nombre de la Lista") },
+                                    label = { Text(textos.labelNombreLista) },
                                     keyboardOptions = opcionesTeclado,
                                     isError = errorNombreCol,
                                     modifier = Modifier.fillMaxWidth(),
@@ -507,7 +507,7 @@ fun PantallaCrear(
                                     onValueChange = {
                                         categoriaColeccion = it; errorCategoriaCol = false
                                     },
-                                    label = { Text("Categoría (Ej: Películas)") },
+                                    label = { Text(textos.labelCategoria) },
                                     keyboardOptions = opcionesTeclado,
                                     isError = errorCategoriaCol,
                                     modifier = Modifier.fillMaxWidth(),
@@ -521,7 +521,7 @@ fun PantallaCrear(
                                 Row(
                                     modifier = Modifier.fillMaxWidth().clickable {
                                         if (usuarioActual == null) {
-                                            coroutineScope.launch { snackbarHostState.showSnackbar("Debes iniciar sesión para publicar listas.") }
+                                            coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgSesionPublicar) }
                                         } else {
                                             estadoDeseadoPrivacidad = !esPublica
                                             mostrarDialogoPrivacidad = true
@@ -539,12 +539,12 @@ fun PantallaCrear(
                                         Spacer(Modifier.width(12.dp))
                                         Column {
                                             Text(
-                                                if (esPublica) "Lista Pública" else "Lista Privada",
+                                                if (esPublica) textos.tituloPublica else textos.tituloPrivada,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 14.sp
                                             )
                                             Text(
-                                                if (esPublica) "Cualquiera podrá encontrarla y jugarla" else "Solo tú puedes ver esta lista",
+                                                if (esPublica) textos.descPublica else textos.descPrivada,
                                                 fontSize = 11.sp, color = Color.Gray
                                             )
                                         }
@@ -554,9 +554,7 @@ fun PantallaCrear(
                                         onCheckedChange = {
                                             if (usuarioActual == null) {
                                                 coroutineScope.launch {
-                                                    snackbarHostState.showSnackbar(
-                                                        "Inicia sesión primero."
-                                                    )
+                                                    snackbarHostState.showSnackbar(textos.msgSesionPrimero)
                                                 }
                                             } else {
                                                 estadoDeseadoPrivacidad = it
@@ -607,14 +605,14 @@ fun PantallaCrear(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            "Palabra Individual",
+                                            textos.etiquetaPalabraIndividual,
                                             color = Color(0xFF18C1A8),
                                             fontWeight = FontWeight.Bold
                                         )
                                         IconButton(
                                             onClick = {
                                                 tituloDialogoBorrado =
-                                                    "Palabra Individual"; indiceParaBorrar = index
+                                                    textos.tituloBorrarPalabra; indiceParaBorrar = index
                                             },
                                             modifier = Modifier.size(24.dp)
                                         ) {
@@ -631,7 +629,7 @@ fun PantallaCrear(
                                         onValueChange = {
                                             elemento.data.palabra = it; validarDuplicadosGlobales()
                                         },
-                                        label = { Text("Palabra Secreta") },
+                                        label = { Text(textos.labelPalabra) },
                                         keyboardOptions = opcionesTeclado,
                                         isError = elemento.data.errorPalabra,
                                         supportingText = {
@@ -674,7 +672,7 @@ fun PantallaCrear(
                                         onValueChange = {
                                             elemento.data.pista = it; validarDuplicadosGlobales()
                                         },
-                                        label = { Text("Pista(s) separadas por coma") },
+                                        label = { Text(textos.labelPistas) },
                                         keyboardOptions = opcionesTeclado,
                                         isError = elemento.data.errorPista,
                                         supportingText = {
@@ -711,7 +709,7 @@ fun PantallaCrear(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = if (elemento.nombre.isBlank()) "Grupo de palabras..." else elemento.nombre,
+                                            text = if (elemento.nombre.isBlank()) textos.placeholderGrupo else elemento.nombre,
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.weight(1f)
@@ -726,7 +724,7 @@ fun PantallaCrear(
                                         IconButton(
                                             onClick = {
                                                 tituloDialogoBorrado =
-                                                    "Grupo Completo"; indiceParaBorrar = index
+                                                    textos.tituloBorrarGrupo; indiceParaBorrar = index
                                             },
                                             modifier = Modifier.size(24.dp)
                                         ) {
@@ -749,7 +747,7 @@ fun PantallaCrear(
                                                     elemento.nombre = it; elemento.errorNombre =
                                                     false
                                                 },
-                                                label = { Text("Nombre de este Grupo") },
+                                                label = { Text(textos.labelNombreGrupo) },
                                                 keyboardOptions = opcionesTeclado,
                                                 isError = elemento.errorNombre,
                                                 modifier = Modifier.fillMaxWidth(),
@@ -772,7 +770,7 @@ fun PantallaCrear(
                                                                 p.palabra =
                                                                     it; validarDuplicadosGlobales()
                                                             },
-                                                            placeholder = { Text("Palabra") },
+                                                            placeholder = { Text(textos.placeholderPalabra) },
                                                             keyboardOptions = opcionesTeclado,
                                                             isError = p.errorPalabra,
                                                             supportingText = {
@@ -818,7 +816,7 @@ fun PantallaCrear(
                                                                 p.pista =
                                                                     it; validarDuplicadosGlobales()
                                                             },
-                                                            placeholder = { Text("Pista(s) separadas por coma") },
+                                                            placeholder = { Text(textos.labelPistas) },
                                                             keyboardOptions = opcionesTeclado,
                                                             isError = p.errorPista,
                                                             supportingText = {
@@ -855,7 +853,7 @@ fun PantallaCrear(
                                                     contentDescription = null,
                                                     tint = Color(0xFFFF6D00)
                                                 ); Spacer(modifier = Modifier.width(4.dp)); Text(
-                                                "AÑADIR PALABRA AL GRUPO",
+                                                textos.btnAnadirPalabraGrupo,
                                                 color = Color(0xFFFF6D00),
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -888,7 +886,7 @@ fun PantallaCrear(
                                     contentColor = Color(0xFF18C1A8)
                                 ),
                                 border = BorderStroke(2.dp, Color(0xFF18C1A8))
-                            ) { Text("+ PALABRA", fontWeight = FontWeight.Bold) }
+                            ) { Text(textos.btnAnadirPalabra, fontWeight = FontWeight.Bold) }
                             Button(
                                 onClick = {
                                     val nuevoConjunto = ElementoUI.Conjunto().apply {
@@ -904,7 +902,7 @@ fun PantallaCrear(
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF2C2C2C)
                                 )
-                            ) { Text("+ GRUPO", fontWeight = FontWeight.Bold, color = Color.White) }
+                            ) { Text(textos.btnAnadirGrupo, fontWeight = FontWeight.Bold, color = Color.White) }
                         }
                         Spacer(modifier = Modifier.height(100.dp))
                     }
@@ -971,15 +969,12 @@ fun PantallaCrear(
                         tint = if (hacerPublica) Color(0xFF18C1A8) else Color(0xFFFF6D00)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(if (hacerPublica) "¿Publicar esta lista?" else "¿Hacer privada?")
+                    Text(if (hacerPublica) textos.tituloDialogoPublicar else textos.tituloDialogoPrivar)
                 }
             },
             text = {
                 Text(
-                    text = if (hacerPublica)
-                        "Al publicar esta lista, cualquier persona en la comunidad podrá verla, jugarla y descargarla. Tu nombre de investigador aparecerá como el creador oficial.\n\nPodrás deshacer esto más adelante."
-                    else
-                        "Si haces esta lista privada, desaparecerá inmediatamente del explorador de la comunidad y solo tú podrás verla o jugarla.",
+                    text = if (hacerPublica) textos.descDialogoPublicar else textos.descDialogoPrivar,
                     fontSize = 15.sp
                 )
             },
@@ -995,12 +990,12 @@ fun PantallaCrear(
                         ) else Color(0xFFFF6D00)
                     )
                 ) {
-                    Text("CONFIRMAR")
+                    Text(textos.btnConfirmar)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { mostrarDialogoPrivacidad = false }) {
-                    Text("CANCELAR", color = Color.Gray)
+                    Text(textos.btnCancelar, color = Color.Gray)
                 }
             }
         )
@@ -1034,11 +1029,11 @@ fun PantallaCrear(
                     ) {
                         TextButton(onClick = { mostrarBuscadorImagen = false }) {
                             Text(
-                                "Cerrar",
+                                textos.btnCerrar,
                                 color = Color.Gray
                             )
                         }
-                        Text("Selecciona una imagen", fontWeight = FontWeight.Bold)
+                        Text(textos.tituloSeleccionarImagen, fontWeight = FontWeight.Bold)
                         Button(
                             onClick = {
                                 coroutineScope.launch {
@@ -1064,15 +1059,15 @@ fun PantallaCrear(
                                         if (!urlLimpia.isNullOrEmpty() && urlLimpia != "null") {
                                             palabraBuscandoImagen!!.imagenUrl = urlLimpia
                                             mostrarBuscadorImagen = false
-                                            coroutineScope.launch { snackbarHostState.showSnackbar("Imagen seleccionada") }
+                                            coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgImagenSelec) }
                                         } else {
-                                            coroutineScope.launch { snackbarHostState.showSnackbar("Abre la imagen en grande primero") }
+                                            coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgAbrirImagen) }
                                         }
                                     }
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
-                        ) { Text("SAVE", fontWeight = FontWeight.Bold) }
+                        ) { Text(textos.btnSaveImagen, fontWeight = FontWeight.Bold) }
                     }
                     WebView(
                         state = webViewState,
@@ -1087,18 +1082,18 @@ fun PantallaCrear(
     if (indiceParaBorrar != null) {
         AlertDialog(
             onDismissRequest = { indiceParaBorrar = null },
-            title = { Text("¿Eliminar $tituloDialogoBorrado?") },
-            text = { Text("¿Estás seguro de que quieres borrar este elemento? Se perderán todos los datos.") },
+            title = { Text(textos.tituloEliminarElemento + tituloDialogoBorrado + "?") },
+            text = { Text(textos.descEliminarElemento) },
             confirmButton = {
                 TextButton(onClick = {
                     indiceParaBorrar?.let { elementos.removeAt(it) }; indiceParaBorrar =
                     null; validarDuplicadosGlobales()
-                }) { Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) }
+                }) { Text(textos.btnEliminar, color = Color.Red, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { indiceParaBorrar = null }) {
                     Text(
-                        "CANCELAR",
+                        textos.btnCancelar,
                         color = Color.Gray
                     )
                 }
@@ -1108,24 +1103,24 @@ fun PantallaCrear(
     if (mostrarDialogoImportar) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoImportar = false },
-            title = { Text("Importar Palabras") },
+            title = { Text(textos.tituloImportar) },
             text = {
                 Column {
                     Text(
-                        "Normas de formato:\nSi la palabra empieza por (.) y no tiene (,) será el nombre de un Grupo. Cada palabra acompañada con (,) que se ponga debajo de un grupo se asociara como palabra y pistas y para finalizar el grupo se pone un (.) en la pista final de la ultima palabra. Si son palabras individuales bastará con poner el nombre y las pistas fuera de cualquier grupo.\n\nPega el texto como el formato de ejemplo:\n.Animales\nPerro, Pista1,Pista2,Pista3\nGato, Pista1,Pista2,Pista3.\n\nCarretera, Pista1,Pista2,Pista3.",
+                        textos.descImportar,
                         fontSize = 14.sp,
                         color = Color.Gray
                     ); Spacer(modifier = Modifier.height(8.dp)); OutlinedTextField(
                     value = textoAImportar,
                     onValueChange = { textoAImportar = it },
                     modifier = Modifier.fillMaxWidth().height(150.dp),
-                    placeholder = { Text("Pega aquí...") })
+                    placeholder = { Text(textos.placeholderImportar) })
                 }
             },
             confirmButton = {
                 TextButton(onClick = { procesarTextoImportacion(textoAImportar) }) {
                     Text(
-                        "PROCESAR",
+                        textos.btnProcesar,
                         color = Color(0xFF18C1A8),
                         fontWeight = FontWeight.Bold
                     )
@@ -1134,7 +1129,7 @@ fun PantallaCrear(
             dismissButton = {
                 TextButton(onClick = {
                     mostrarDialogoImportar = false
-                }) { Text("CANCELAR", color = Color.Gray) }
+                }) { Text(textos.btnCancelar, color = Color.Gray) }
             })
     }
 
@@ -1147,10 +1142,10 @@ fun PantallaCrear(
                         Icons.Rounded.Warning,
                         null,
                         tint = Color(0xFFFF6D00)
-                    ); Spacer(Modifier.width(8.dp)); Text("¡Palabras repetidas!")
+                    ); Spacer(Modifier.width(8.dp)); Text(textos.tituloConflictos)
                 }
             },
-            text = { Text("Algunas de las palabras que intentas importar ya existen. ¿Qué deseas hacer?") },
+            text = { Text(textos.descConflictos) },
             confirmButton = {
                 Column(
                     horizontalAlignment = Alignment.End,
@@ -1175,7 +1170,7 @@ fun PantallaCrear(
                             false; mostrarDialogoImportar = false; textoAImportar = ""
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
-                    ) { Text("Reemplazar antiguas") }
+                    ) { Text(textos.btnReemplazar) }
                     Button(
                         onClick = {
                             val palabrasActuales =
@@ -1196,17 +1191,17 @@ fun PantallaCrear(
                             false; mostrarDialogoImportar = false; textoAImportar = ""
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C))
-                    ) { Text("Omitir nuevas repetidas") }
+                    ) { Text(textos.btnOmitirNuevas) }
                     OutlinedButton(onClick = {
                         aplicarYFusionarElementos(elementosPendientesImportar); validarDuplicadosGlobales(); mostrarDialogoConflictos =
                         false; mostrarDialogoImportar = false; textoAImportar = ""
-                    }) { Text("Añadir todo y editar manual", color = Color.Gray) }
+                    }) { Text(textos.btnAnadirTodo, color = Color.Gray) }
                 }
             },
             dismissButton = {
                 TextButton(onClick = {
                     mostrarDialogoConflictos = false
-                }) { Text("CANCELAR IMPORTACIÓN") }
+                }) { Text(textos.btnCancelarImportacion) }
             })
     }
 }
