@@ -306,6 +306,13 @@ fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boole
         else -> { containerColor = Color(0xFF181818); textColor = Color.White; categoryColor = Color(0xFFFF6D00); infoColor = Color.LightGray; picBorderColor = Color(0xFFFF6D00); border = null }
     }
 
+    // 👇 NUEVO: Unimos todas las categorías mezcladas si las hay
+    val textoCategorias = if (coleccion.categoriasMezcladas.size > 1) {
+        coleccion.categoriasMezcladas.joinToString(" • ").uppercase()
+    } else {
+        coleccion.categoria.uppercase()
+    }
+
     Card(modifier = Modifier.width(160.dp).height(240.dp).clip(RoundedCornerShape(16.dp)).clickable { onJugarClick() }, colors = CardDefaults.cardColors(containerColor = containerColor), elevation = CardDefaults.cardElevation(defaultElevation = if (esPredeterminada || coleccion.esDescargada || coleccion.esColaboracion) 0.dp else 4.dp), border = border) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -329,7 +336,10 @@ fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boole
                 }
             }
             Spacer(modifier = Modifier.height(12.dp)); Text(coleccion.nombre, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(modifier = Modifier.height(6.dp)); Surface(color = if (esPredeterminada) Color(0xFFB2DFDB) else if (coleccion.esColaboracion) Color(0xFFFFE0B2) else if (coleccion.esDescargada) Color(0xFFBBDEFB) else Color(0xFF2C2C2C), shape = RoundedCornerShape(8.dp)) { Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = categoryColor, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+
+            // 👇 APLICAMOS EL TEXTO DE CATEGORÍAS AQUÍ
+            Spacer(modifier = Modifier.height(6.dp)); Surface(color = if (esPredeterminada) Color(0xFFB2DFDB) else if (coleccion.esColaboracion) Color(0xFFFFE0B2) else if (coleccion.esDescargada) Color(0xFFBBDEFB) else Color(0xFF2C2C2C), shape = RoundedCornerShape(8.dp)) { Text(textoCategorias, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = categoryColor, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+
             Spacer(modifier = Modifier.weight(1f)); HorizontalDivider(color = infoColor, thickness = 1.dp); Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onInfoClick, modifier = Modifier.size(28.dp)) { Icon(Icons.Rounded.Info, null, tint = infoColor, modifier = Modifier.size(18.dp)) }
@@ -342,8 +352,32 @@ fun TarjetaColeccionInicio(coleccion: ColeccionGuardada, esPredeterminada: Boole
 @Composable
 fun DialogoInfoColeccion(coleccion: ColeccionGuardada, textos: TextosInicio, onCerrar: () -> Unit) {
     var textoBusqueda by remember { mutableStateOf("") }
-    val todasLasPalabras = remember(coleccion) { coleccion.elementos.flatMap { when (it) { is ElementoGuardado.Individual -> listOf(it.palabra); is ElementoGuardado.Conjunto -> it.palabras.map { p -> p.palabra } } } }
-    val filtradas = todasLasPalabras.filter { it.contains(textoBusqueda, ignoreCase = true) }
+
+    // 👇 NUEVO: Extraemos cada palabra asociándola a su categoría original
+    val palabrasConCategoria = remember(coleccion) {
+        coleccion.elementos.flatMap { elemento ->
+            when (elemento) {
+                is ElementoGuardado.Individual -> listOf(
+                    Pair(elemento.palabra, elemento.categoriaOrigen.ifBlank { coleccion.categoria })
+                )
+                is ElementoGuardado.Conjunto -> elemento.palabras.map { p ->
+                    Pair(p.palabra, p.categoriaOrigen.ifBlank { coleccion.categoria })
+                }
+            }
+        }
+    }
+
+    val filtradas = palabrasConCategoria.filter { it.first.contains(textoBusqueda, ignoreCase = true) }
+
+    // 👇 NUEVO: Agrupamos la lista filtrada usando la categoría como clave
+    val agrupadasPorCategoria = filtradas.groupBy { it.second }
+
+    // 👇 NUEVO: Texto de cabecera con todas las categorías unidas
+    val textoCategorias = if (coleccion.categoriasMezcladas.size > 1) {
+        coleccion.categoriasMezcladas.joinToString(" • ")
+    } else {
+        coleccion.categoria
+    }
 
     Dialog(onDismissRequest = onCerrar) {
         Card(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
@@ -351,18 +385,32 @@ fun DialogoInfoColeccion(coleccion: ColeccionGuardada, textos: TextosInicio, onC
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(coleccion.nombre, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Text(coleccion.categoria, color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        // Mostramos el bloque de categorías unidas debajo del nombre
+                        Text(textoCategorias, color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                     IconButton(onClick = onCerrar) { Icon(Icons.Rounded.Close, null) }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(value = textoBusqueda, onValueChange = { textoBusqueda = it }, placeholder = { Text(textos.buscarPalabra) }, leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Gray) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50), singleLine = true)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("${textos.contiene} ${todasLasPalabras.size} ${textos.palabras}", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("${textos.contiene} ${palabrasConCategoria.size} ${textos.palabras}", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
                 LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(filtradas) { p ->
-                        Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFF5F5F5), shape = RoundedCornerShape(8.dp)) {
-                            Text(p, modifier = Modifier.padding(12.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    // 👇 NUEVO: Iteramos sobre los grupos en lugar de una lista plana
+                    agrupadasPorCategoria.forEach { (categoria, listaPalabras) ->
+                        item {
+                            Text(
+                                text = categoria.uppercase(),
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(listaPalabras) { p ->
+                            Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFF5F5F5), shape = RoundedCornerShape(8.dp)) {
+                                Text(p.first, modifier = Modifier.padding(12.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                 }

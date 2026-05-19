@@ -46,15 +46,26 @@ data class ColeccionGuardada(
     val esPublica: Boolean = false,
     val esDescargada: Boolean = false,
     val colaboradores: List<String> = emptyList(),
-    val esColaboracion: Boolean = false
+    val esColaboracion: Boolean = false,
+    val categoriasMezcladas: List<String> = emptyList() // 👇 NUEVO: Guarda los nombres de las categorías originales si es una mezcla
 )
 
 @Serializable
 sealed class ElementoGuardado {
     @Serializable
-    data class Individual(val palabra: String, val pista: String, val imagenUrl: String?) : ElementoGuardado()
+    data class Individual(
+        val palabra: String,
+        val pista: String,
+        val imagenUrl: String?,
+        val categoriaOrigen: String = "" // 👇 NUEVO: Etiqueta para saber de qué categoría viene
+    ) : ElementoGuardado()
+
     @Serializable
-    data class Conjunto(val nombreConjunto: String, val palabras: List<Individual>) : ElementoGuardado()
+    data class Conjunto(
+        val nombreConjunto: String,
+        val palabras: List<Individual>,
+        val categoriaOrigen: String = "" // 👇 NUEVO: Etiqueta para saber de qué categoría viene
+    ) : ElementoGuardado()
 }
 
 object GestorDatos {
@@ -257,15 +268,24 @@ object GestorDatos {
             categoria = pred.categoria,
             elementos = pred.elementos.map { elemPre ->
                 when (elemPre) {
-                    is ElementoPredefinido.Individual -> ElementoGuardado.Individual(elemPre.palabra, elemPre.pista, null)
+                    is ElementoPredefinido.Individual -> ElementoGuardado.Individual(
+                        palabra = elemPre.palabra,
+                        pista = elemPre.pista,
+                        imagenUrl = null,
+                        categoriaOrigen = pred.categoria // 👇 NUEVO
+                    )
                     is ElementoPredefinido.Conjunto -> ElementoGuardado.Conjunto(
                         nombreConjunto = elemPre.nombreConjunto,
-                        palabras = elemPre.palabras.map { ElementoGuardado.Individual(it.palabra, it.pista, null) }
+                        palabras = elemPre.palabras.map {
+                            ElementoGuardado.Individual(it.palabra, it.pista, null, pred.categoria)
+                        },
+                        categoriaOrigen = pred.categoria // 👇 NUEVO
                     )
                 }
             },
             nombreCreador = "Unmask Oficial",
-            esPublica = true
+            esPublica = true,
+            categoriasMezcladas = listOf(pred.categoria) // 👇 NUEVO
         )
     }
 

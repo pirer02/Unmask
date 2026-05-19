@@ -57,13 +57,18 @@ data class TextosCrear(
     val msgImagenSelec: String,
     val msgAbrirImagen: String,
     val errorRepetida: String,
-    // 👇 NUEVOS TEXTOS PARA IMPORTAR/EXPORTAR 👇
     val tituloOpcionesTexto: String,
     val btnOpcionImportar: String,
     val btnOpcionExportar: String,
     val tituloExportar: String,
     val btnCopiar: String,
-    val msgCopiado: String
+    val msgCopiado: String,
+    val btnOpcionMezclar: String,
+    val tituloMezclar: String,
+    val descMezclar: String,
+    val btnConfirmarMezcla: String,
+    // 👇 NUEVO CAMPO 👇
+    val labelCategoriaElemento: String
 )
 
 fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
@@ -89,7 +94,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "Elementos importados con éxito", msgSesionPublicar = "Debes iniciar sesión para publicar listas.", msgSesionPrimero = "Inicia sesión primero.",
             msgImagenSelec = "Imagen seleccionada", msgAbrirImagen = "Abre la imagen en grande primero", errorRepetida = "Repetida",
             tituloOpcionesTexto = "¿Qué deseas hacer?", btnOpcionImportar = "Importar Textos", btnOpcionExportar = "Exportar Lista",
-            tituloExportar = "Exportar Lista", btnCopiar = "COPIAR TEXTO", msgCopiado = "Texto copiado al portapapeles"
+            tituloExportar = "Exportar Lista", btnCopiar = "COPIAR TEXTO", msgCopiado = "Texto copiado al portapapeles",
+            btnOpcionMezclar = "Mezclar con otras Listas", tituloMezclar = "Mezclar Listas", descMezclar = "Selecciona las listas que quieres unir a esta. Se mantendrán las categorías originales de cada palabra.", btnConfirmarMezcla = "MEZCLAR SELECCIONADAS",
+            labelCategoriaElemento = "Categoría específica (Opcional)"
         )
         IdiomaSoportado.FRANCES -> TextosCrear(
             cargandoTaller = "Préparation de l'atelier...", tituloEditar = "Modifier la liste", tituloNueva = "Nouvelle liste", btnGuardar = "SAUVEGARDER",
@@ -112,7 +119,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "Éléments importés avec succès", msgSesionPublicar = "Connectez-vous pour publier des listes.", msgSesionPrimero = "Connectez-vous d'abord.",
             msgImagenSelec = "Image sélectionnée", msgAbrirImagen = "Ouvrez l'image en grand d'abord", errorRepetida = "Répété",
             tituloOpcionesTexto = "Que voulez-vous faire ?", btnOpcionImportar = "Importer des textes", btnOpcionExportar = "Exporter la liste",
-            tituloExportar = "Exporter la liste", btnCopiar = "COPIER LE TEXTE", msgCopiado = "Texte copié dans le presse-papiers"
+            tituloExportar = "Exporter la liste", btnCopiar = "COPIER LE TEXTE", msgCopiado = "Texte copié dans le presse-papiers",
+            btnOpcionMezclar = "Mélanger avec d'autres listes", tituloMezclar = "Mélanger les listes", descMezclar = "Sélectionnez les listes que vous souhaitez joindre. Les catégories d'origine seront conservées pour le jeu.", btnConfirmarMezcla = "MÉLANGER LA SÉLECTION",
+            labelCategoriaElemento = "Catégorie spécifique (Optionnel)"
         )
         IdiomaSoportado.ITALIANO -> TextosCrear(
             cargandoTaller = "Preparazione del laboratorio...", tituloEditar = "Modifica Lista", tituloNueva = "Nuova Lista", btnGuardar = "SALVA",
@@ -135,7 +144,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "Elementi importati con successo", msgSesionPublicar = "Devi accedere per pubblicare le liste.", msgSesionPrimero = "Accedi prima.",
             msgImagenSelec = "Immagine selezionata", msgAbrirImagen = "Apri l'immagine in grande prima", errorRepetida = "Ripetuta",
             tituloOpcionesTexto = "Cosa vuoi fare?", btnOpcionImportar = "Importa testi", btnOpcionExportar = "Esporta Lista",
-            tituloExportar = "Esporta Lista", btnCopiar = "COPIA TESTO", msgCopiado = "Testo copiato negli appunti"
+            tituloExportar = "Esporta Lista", btnCopiar = "COPIA TESTO", msgCopiado = "Testo copiato negli appunti",
+            btnOpcionMezclar = "Mescola con altre liste", tituloMezclar = "Mescola Liste", descMezclar = "Seleziona le liste che vuoi unire a questa. Le categorie originali verranno mantenute per il gioco.", btnConfirmarMezcla = "MESCOLA SELEZIONATE",
+            labelCategoriaElemento = "Categoria specifica (Opzionale)"
         )
         IdiomaSoportado.ALEMAN -> TextosCrear(
             cargandoTaller = "Werkstatt wird vorbereitet...", tituloEditar = "Liste bearbeiten", tituloNueva = "Neue Liste", btnGuardar = "SPEICHERN",
@@ -158,7 +169,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "Elemente erfolgreich importiert", msgSesionPublicar = "Du musst dich anmelden, um Listen zu veröffentlichen.", msgSesionPrimero = "Zuerst anmelden.",
             msgImagenSelec = "Bild ausgewählt", msgAbrirImagen = "Öffne das Bild zuerst in groß", errorRepetida = "Wiederholt",
             tituloOpcionesTexto = "Was möchtest du tun?", btnOpcionImportar = "Texte importieren", btnOpcionExportar = "Liste exportieren",
-            tituloExportar = "Liste exportieren", btnCopiar = "TEXT KOPIEREN", msgCopiado = "Text in die Zwischenablage kopiert"
+            tituloExportar = "Liste exportieren", btnCopiar = "TEXT KOPIEREN", msgCopiado = "Text in die Zwischenablage kopiert",
+            btnOpcionMezclar = "Mit anderen Listen mischen", tituloMezclar = "Listen mischen", descMezclar = "Wähle die Listen aus, die du mit dieser verbinden möchtest. Die ursprünglichen Kategorien bleiben für das Spiel erhalten.", btnConfirmarMezcla = "AUSGEWÄHLTE MISCHEN",
+            labelCategoriaElemento = "Spezifische Kategorie (Optional)"
         )
         IdiomaSoportado.CHINO -> TextosCrear(
             cargandoTaller = "正在准备工作坊...", tituloEditar = "编辑列表", tituloNueva = "新列表", btnGuardar = "保存",
@@ -181,7 +194,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "元素导入成功", msgSesionPublicar = "您必须登录才能发布列表。", msgSesionPrimero = "请先登录。",
             msgImagenSelec = "已选择图片", msgAbrirImagen = "请先打开大图", errorRepetida = "重复",
             tituloOpcionesTexto = "你想做什么？", btnOpcionImportar = "导入文本", btnOpcionExportar = "导出列表",
-            tituloExportar = "导出列表", btnCopiar = "复制文本", msgCopiado = "文本已复制到剪贴板"
+            tituloExportar = "导出列表", btnCopiar = "复制文本", msgCopiado = "文本已复制到剪贴板",
+            btnOpcionMezclar = "与其他列表混合", tituloMezclar = "混合列表", descMezclar = "选择要合并到此列表的列表。游戏将保留原始类别。", btnConfirmarMezcla = "混合所选",
+            labelCategoriaElemento = "特定类别（可选）"
         )
         IdiomaSoportado.JAPONES -> TextosCrear(
             cargandoTaller = "ワークショップを準備中...", tituloEditar = "リストを編集", tituloNueva = "新しいリスト", btnGuardar = "保存",
@@ -204,7 +219,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "要素が正常にインポートされました", msgSesionPublicar = "リストを公開するにはログインする必要があります。", msgSesionPrimero = "最初にログインしてください。",
             msgImagenSelec = "画像が選択されました", msgAbrirImagen = "最初に大きな画像を開いてください", errorRepetida = "重複",
             tituloOpcionesTexto = "どうしますか？", btnOpcionImportar = "テキストをインポート", btnOpcionExportar = "リストをエクスポート",
-            tituloExportar = "リストをエクスポート", btnCopiar = "テキストをコピー", msgCopiado = "クリップボードにコピーしました"
+            tituloExportar = "リストをエクスポート", btnCopiar = "テキストをコピー", msgCopiado = "クリップボードにコピーしました",
+            btnOpcionMezclar = "他のリストとミックス", tituloMezclar = "リストをミックス", descMezclar = "このリストに結合するリストを選択します。ゲームの元のカテゴリは保持されます。", btnConfirmarMezcla = "選択したものをミックス",
+            labelCategoriaElemento = "元のカテゴリ (省略可)"
         )
         else -> TextosCrear(
             cargandoTaller = "Preparing the workshop...", tituloEditar = "Edit List", tituloNueva = "New List", btnGuardar = "SAVE",
@@ -227,7 +244,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgImportExito = "Elements imported successfully", msgSesionPublicar = "You must log in to publish lists.", msgSesionPrimero = "Log in first.",
             msgImagenSelec = "Image selected", msgAbrirImagen = "Open the full image first", errorRepetida = "Repeated",
             tituloOpcionesTexto = "What do you want to do?", btnOpcionImportar = "Import Texts", btnOpcionExportar = "Export List",
-            tituloExportar = "Export List", btnCopiar = "COPY TEXT", msgCopiado = "Text copied to clipboard"
+            tituloExportar = "Export List", btnCopiar = "COPY TEXT", msgCopiado = "Text copied to clipboard",
+            btnOpcionMezclar = "Mix with other Lists", tituloMezclar = "Mix Lists", descMezclar = "Select the lists you want to join to this one. The original categories will be kept for the game.", btnConfirmarMezcla = "MIX SELECTED",
+            labelCategoriaElemento = "Specific Category (Optional)"
         )
     }
 }

@@ -49,7 +49,8 @@ data class PalabraJuego(
     val palabra: String,
     val pista: String,
     val nombreGrupo: String? = null,
-    val imagenUrl: String? = null
+    val imagenUrl: String? = null,
+    val categoriaOrigen: String = "" // 👇 NUEVO
 )
 
 @Composable
@@ -67,9 +68,19 @@ fun PantallaJuego(
     val pasoTutorial = GestorDatos.pasoTutorialActual
     var mostrarAvisoSalirTutorial by remember { mutableStateOf(false) }
 
-    androidx.activity.compose.BackHandler(enabled = pasoTutorial in 5..7) {
-        mostrarAvisoSalirTutorial = true
+    // 👇 NUEVO: Estados para los diálogos de confirmación de salida
+    var mostrarDialogoConfirmarSalir by remember { mutableStateOf(false) }
+    var mostrarDialogoConfirmarAnular by remember { mutableStateOf(false) }
+
+    // Controlamos el botón de atrás del sistema
+    androidx.activity.compose.BackHandler(enabled = true) {
+        if (pasoTutorial in 5..7) {
+            mostrarAvisoSalirTutorial = true
+        } else {
+            mostrarDialogoConfirmarSalir = true
+        }
     }
+
 
     // --- PREPARACIÓN ---
     val palabraElegida = remember {
@@ -83,7 +94,8 @@ fun PantallaJuego(
                             .filter { it.isNotEmpty() }
                             .randomOrNull()?.capitalizarPrimera() ?: "",
                         nombreGrupo = null,
-                        imagenUrl = elemento.imagenUrl
+                        imagenUrl = elemento.imagenUrl,
+                        categoriaOrigen = elemento.categoriaOrigen.ifBlank { coleccion.categoria } // 👇 NUEVO
                     )
                 )
                 is ElementoGuardado.Conjunto -> elemento.palabras.map { p ->
@@ -94,7 +106,8 @@ fun PantallaJuego(
                             .filter { it.isNotEmpty() }
                             .randomOrNull()?.capitalizarPrimera() ?: "",
                         nombreGrupo = elemento.nombreConjunto.capitalizarPrimera(),
-                        imagenUrl = p.imagenUrl
+                        imagenUrl = p.imagenUrl,
+                        categoriaOrigen = p.categoriaOrigen.ifBlank { coleccion.categoria } // 👇 NUEVO
                     )
                 }
             }
@@ -214,7 +227,7 @@ fun PantallaJuego(
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 if (pasoTutorial in 5..7) mostrarAvisoSalirTutorial = true
-                else onSalir()
+                else mostrarDialogoConfirmarSalir = true // 👇 MODIFICADO: Ahora pregunta antes de volver
             }) {
                 Icon(Icons.Rounded.Close, contentDescription = "Salir", tint = Color.Gray)
             }
@@ -230,7 +243,17 @@ fun PantallaJuego(
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(48.dp))
+
+            // 👇 NUEVO: Botón arriba a la derecha para anular la partida sin gastar palabra
+            if (opciones.sinRepeticiones && fase != FaseJuego.RESULTADOS && pasoTutorial !in 5..7) {
+                TextButton(onClick = { mostrarDialogoConfirmarAnular = true }) {
+                    Icon(Icons.Rounded.DeleteForever, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(textos.btnPartidaInvalida, color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            } else {
+                Spacer(modifier = Modifier.width(48.dp)) // Mantiene el centrado si el botón no está
+            }
         }
 
         // ESPACIADOR DINÁMICO PARA EL TUTORIAL
@@ -255,7 +278,9 @@ fun PantallaJuego(
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Color.White).border(2.dp, if(esImpostor) Color(0xFFFF3D00) else Color(0xFF18C1A8), RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "${textos.txtTema} ${coleccion.categoria.uppercase()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.Gray, letterSpacing = 2.sp)
+                                // 👇 NUEVO: Mostramos la categoría de la que viene la palabra para dar contexto a todos (¡incluido el impostor!)
+                                Text(text = "${textos.txtTema} ${palabraElegida.categoriaOrigen.uppercase()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.Gray, letterSpacing = 2.sp)
+
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(text = if(esImpostor) textos.rolImpostor else textos.rolCivil, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = if(esImpostor) Color(0xFFFF3D00) else Color(0xFF18C1A8))
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -434,6 +459,74 @@ fun PantallaJuego(
                 if (GestorDatos.pasoTutorialActual == 6) GestorDatos.avanzarTutorial(7)
             },
             onVolver = { mostrarDialogoVotar = false }
+        )
+    }
+
+    if (mostrarDialogoConfirmarSalir) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoConfirmarSalir = false },
+            title = { Text(textos.tituloConfirmarSalir, fontWeight = FontWeight.Bold) },
+            text = { Text(textos.descConfirmarSalir) },
+            confirmButton = {
+                TextButton(onClick = {
+                    mostrarDialogoConfirmarSalir = false
+                    onSalir()
+                }) {
+                    Text(textos.btnConfirmar, color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoConfirmarSalir = false }) {
+                    Text(textos.btnCancelar, color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (mostrarDialogoConfirmarAnular) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoConfirmarAnular = false },
+            title = { Text(textos.tituloConfirmarAnular, fontWeight = FontWeight.Bold) },
+            text = { Text(textos.descConfirmarAnular) },
+            confirmButton = {
+                TextButton(onClick = {
+                    mostrarDialogoConfirmarAnular = false
+                    if (opciones.sinRepeticiones) {
+                        // Quitamos la palabra de la lista de usadas en esta sesión
+                        GestorDatos.palabrasUsadasSesion.remove(palabraElegida.palabra)
+
+                        // Si hay un checkpoint activo, actualizamos sus datos en memoria local
+                        if (GestorDatos.checkpointActivoId != null) {
+                            val cpActual = GestorDatos.checkpointsGlobales.find { it.id == GestorDatos.checkpointActivoId }
+                            if (cpActual != null) {
+                                val cpActualizado = cpActual.copy(
+                                    palabrasUsadas = GestorDatos.palabrasUsadasSesion.toList(),
+                                    fecha = System.currentTimeMillis()
+                                )
+                                val index = GestorDatos.checkpointsGlobales.indexOf(cpActual)
+                                if (index != -1) {
+                                    GestorDatos.checkpointsGlobales[index] = cpActualizado
+                                    GestorDatos.guardarCambiosMemoria()
+                                }
+                            }
+                        }
+                        // Sincronizamos con la nube el cambio del checkpoint
+                        usuarioAuth?.uid?.let { uid ->
+                            scope.launch {
+                                GestorDatos.subirCheckpointsNube(uid)
+                            }
+                        }
+                    }
+                    onSalir()
+                }) {
+                    Text(textos.btnConfirmar, color = Color.Red, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoConfirmarAnular = false }) {
+                    Text(textos.btnCancelar, color = Color.Gray)
+                }
+            }
         )
     }
 

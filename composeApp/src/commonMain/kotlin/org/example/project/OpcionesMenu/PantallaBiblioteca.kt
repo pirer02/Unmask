@@ -254,6 +254,13 @@ fun TarjetaColeccion(
 
     val esObjetivoTutorial = pasoTutorial == 3 && !coleccion.esDescargada && !coleccion.esColaboracion
 
+    // 👇 NUEVO: Unimos todas las categorías mezcladas
+    val textoCategorias = if (coleccion.categoriasMezcladas.size > 1) {
+        coleccion.categoriasMezcladas.joinToString(" • ").uppercase()
+    } else {
+        coleccion.categoria.uppercase()
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = colorFondo),
@@ -289,7 +296,8 @@ fun TarjetaColeccion(
                         Text(textos.porMi, color = colorAcento.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Text(coleccion.categoria.uppercase(), color = colorAcento, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                    // 👇 APLICAMOS EL TEXTO AQUÍ
+                    Text(textoCategorias, color = colorAcento, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                 }
                 Surface(color = colorFondoChip, border = borderStroke, shape = RoundedCornerShape(8.dp)) {
                     Text(text = "$totalPalabras ${textos.pal}", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = colorAcento)

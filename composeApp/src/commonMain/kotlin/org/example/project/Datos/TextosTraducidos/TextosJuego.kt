@@ -48,7 +48,14 @@ data class TextosJuego(
     val dialogoSalirTutTitulo: String,
     val dialogoSalirTutDesc: String,
     val btnEntendido: String,
-    val txtRonda: String
+    val txtRonda: String,
+    val btnPartidaInvalida: String,
+    val tituloConfirmarSalir: String,
+    val descConfirmarSalir: String,
+    val tituloConfirmarAnular: String,
+    val descConfirmarAnular: String,
+    val btnConfirmar: String,
+    val btnCancelar: String
 )
 
 fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
@@ -71,7 +78,12 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             msgAtrapado = "Habéis atrapado a ", msgErrorInocente1 = "¡ERROR! ", msgErrorInocente2 = " era inocente. Los impostores ganan por votación errónea.",
             tituloVotar = "¿Quién es el impostor?", descVotar = "Si falláis, perderéis la partida.", btnVolver = "VOLVER", btnRevelar = "REVELAR",
             dialogoSalirTutTitulo = "¡Termina la partida!", dialogoSalirTutDesc = "Estás en la recta final del tutorial. Termina la partida de prueba para ver cómo funciona todo el ciclo, o pulsa 'OMITIR TUTORIAL' arriba.",
-            btnEntendido = "ENTENDIDO", txtRonda = "Ronda"
+            btnEntendido = "ENTENDIDO", txtRonda = "Ronda",
+            btnPartidaInvalida = "PARTIDA NO VÁLIDA", tituloConfirmarSalir = "¿Salir de la partida?",
+            descConfirmarSalir = "¿Estás seguro de que quieres salir y volver a la configuración de la partida?",
+            tituloConfirmarAnular = "¿Anular esta partida?",
+            descConfirmarAnular = "Esta partida no contará y la palabra secreta volverá a estar disponible en la biblioteca sin gastarse. ¿Deseas continuar?",
+            btnConfirmar = "CONFIRMAR", btnCancelar = "CANCELAR"
         )
         IdiomaSoportado.FRANCES -> TextosJuego(
             txtDesliza = "Glissez pour voir votre rôle", txtTema = "THÈME :", rolImpostor = "IMPOSTEUR", rolCivil = "CIVIL",
@@ -91,7 +103,12 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             msgAtrapado = "Vous avez attrapé ", msgErrorInocente1 = "ERREUR ! ", msgErrorInocente2 = " était innocent. Les imposteurs gagnent par erreur de vote.",
             tituloVotar = "Qui est l'imposteur ?", descVotar = "Si vous vous trompez, vous perdez.", btnVolver = "RETOUR", btnRevelar = "RÉVÉLER",
             dialogoSalirTutTitulo = "Terminez la partie !", dialogoSalirTutDesc = "Vous êtes à la fin du tutoriel. Finissez pour voir tout le cycle, ou passez-le.",
-            btnEntendido = "COMPRIS", txtRonda = "Manche"
+            btnEntendido = "COMPRIS", txtRonda = "Manche",
+            btnPartidaInvalida = "MATCH INVALIDE", tituloConfirmarSalir = "Quitter la partie ?",
+            descConfirmarSalir = "Êtes-vous sûr de vouloir quitter et revenir à la configuration du jeu ?",
+            tituloConfirmarAnular = "Annuler la partie ?",
+            descConfirmarAnular = "Ce match ne comptera pas et le mot secret sera à nouveau disponible. Voulez-vous continuer ?",
+            btnConfirmar = "CONFIRMER", btnCancelar = "ANNULER"
         )
         IdiomaSoportado.ITALIANO -> TextosJuego(
             txtDesliza = "Scorri per vedere il tuo ruolo", txtTema = "TEMA:", rolImpostor = "IMPOSTORE", rolCivil = "CIVILE",
@@ -108,10 +125,15 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             txtVictoriaPara = "VITTORIA DEI", txtVictoriaCiviles = "CIVILI", txtVictoriaImpostores = "IMPOSTORI",
             txtPalabraSecreta = "Parola segreta:\n", txtImpostores = "Impostori:\n",
             btnFinalizarPrueba = "TERMINA PARTITA PROVA", btnVolverMenu = "TORNA AL MENU",
-            msgAtrapado = "Avete catturato ", msgErrorInocente1 = "ERRORE! ", msgErrorInocente2 = " era innocente. Gli impostori vincono per voto errato.",
+            msgAtrapado = "Avete catturato ", msgErrorInocente1 = "ERRORE! ", msgErrorInocente2 = " era inocente. Gli impostori vincono per voto errato.",
             tituloVotar = "Chi è l'impostore?", descVotar = "Se sbagliate, perdete la partita.", btnVolver = "INDIETRO", btnRevelar = "RIVELA",
             dialogoSalirTutTitulo = "Finisci la partita!", dialogoSalirTutDesc = "Sei alla fine del tutorial. Concludi la partita per vedere il ciclo completo o saltalo.",
-            btnEntendido = "CAPITO", txtRonda = "Round"
+            btnEntendido = "CAPITO", txtRonda = "Round",
+            btnPartidaInvalida = "PARTITA NON VALIDA", tituloConfirmarSalir = "Uscire dalla partita?",
+            descConfirmarSalir = "Sei sicuro di voler uscire e tornare alla configurazione del gioco?",
+            tituloConfirmarAnular = "Annullare la partita?",
+            descConfirmarAnular = "Questa partita non conterà e la parola segreta sarà di nuovo disponible. Vuoi continuare?",
+            btnConfirmar = "CONFERMA", btnCancelar = "ANNULER"
         )
         IdiomaSoportado.ALEMAN -> TextosJuego(
             txtDesliza = "Wische, um deine Rolle zu sehen", txtTema = "THEMA:", rolImpostor = "IMPOSTOR", rolCivil = "ZIVILIST",
@@ -131,7 +153,12 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             msgAtrapado = "Ihr habt gefangen: ", msgErrorInocente1 = "FEHLER! ", msgErrorInocente2 = " war unschuldig. Die Impostors gewinnen durch falsche Wahl.",
             tituloVotar = "Wer ist der Impostor?", descVotar = "Wenn ihr falsch liegt, verliert ihr.", btnVolver = "ZURÜCK", btnRevelar = "ENTHÜLLEN",
             dialogoSalirTutTitulo = "Beende das Spiel!", dialogoSalirTutDesc = "Du bist am Ende des Tutorials. Beende das Testspiel oder überspringe es.",
-            btnEntendido = "VERSTANDEN", txtRonda = "Runde"
+            btnEntendido = "VERSTANDEN", txtRonda = "Runde",
+            btnPartidaInvalida = "UNGÜLTIGES SPIEL", tituloConfirmarSalir = "Spiel verlassen?",
+            descConfirmarSalir = "Bist du sicher, dass du das Spiel verlassen und zur Konfiguration zurückkehren möchtest?",
+            tituloConfirmarAnular = "Spiel annullieren?",
+            descConfirmarAnular = "Dieses Spiel wird nicht gezählt und das geheime Wort ist wieder verfügbar. Möchtest du fortfahren?",
+            btnConfirmar = "BESTÄTIGEN", btnCancelar = "ABBRECHEN"
         )
         IdiomaSoportado.CHINO -> TextosJuego(
             txtDesliza = "滑动查看您的角色", txtTema = "主题：", rolImpostor = "卧底", rolCivil = "平民",
@@ -151,7 +178,12 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             msgAtrapado = "你们抓住了 ", msgErrorInocente1 = "错误！", msgErrorInocente2 = " 是无辜的。卧底因错误投票而获胜。",
             tituloVotar = "谁是卧底？", descVotar = "如果失败，你们将输掉比赛。", btnVolver = "返回", btnRevelar = "揭晓",
             dialogoSalirTutTitulo = "结束游戏！", dialogoSalirTutDesc = "您正处于教程的最后阶段。完成测试游戏以了解其运作方式，或点击上面的跳过。",
-            btnEntendido = "明白了", txtRonda = "回合"
+            btnEntendido = "明白了", txtRonda = "回合",
+            btnPartidaInvalida = "无效对局", tituloConfirmarSalir = "退出游戏？",
+            descConfirmarSalir = "您确定要退出并返回配置界面吗？",
+            tituloConfirmarAnular = "取消本局？",
+            descConfirmarAnular = "本局将不计入统计，秘密单词将重新放回牌堆。是否继续？",
+            btnConfirmar = "确认", btnCancelar = "取消"
         )
         IdiomaSoportado.JAPONES -> TextosJuego(
             txtDesliza = "スワイプして役割を確認", txtTema = "テーマ:", rolImpostor = "インポスター", rolCivil = "市民",
@@ -171,9 +203,13 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             msgAtrapado = "捕まえたのは: ", msgErrorInocente1 = "エラー！", msgErrorInocente2 = " は無実でした。誤った投票によりインポスターの勝利です。",
             tituloVotar = "インポスターは誰ですか？", descVotar = "間違えるとゲームに負けます。", btnVolver = "戻る", btnRevelar = "公開する",
             dialogoSalirTutTitulo = "ゲームを完了してください！", dialogoSalirTutDesc = "チュートリアルの最終段階です。テストゲームを完了するか、スキップしてください。",
-            btnEntendido = "了解", txtRonda = "ラウンド"
+            btnEntendido = "了解", txtRonda = "ラウンド",
+            btnPartidaInvalida = "試合を無効にする", tituloConfirmarSalir = "ゲームを終了しますか？",
+            descConfirmarSalir = "終了して設定画面に戻ってもよろしいですか？",
+            tituloConfirmarAnular = "試合を無効にしますか？",
+            descConfirmarAnular = "この試合はカウントされず、秘密の単語は再び利用可能になります。続行しますか？",
+            btnConfirmar = "確認", btnCancelar = "キャンセル"
         )
-        // INGLÉS POR DEFECTO
         else -> TextosJuego(
             txtDesliza = "Swipe to see your role", txtTema = "THEME:", rolImpostor = "IMPOSTOR", rolCivil = "CIVILIAN",
             txtPista = "Clue:", txtNoTeDescubras = "Don't blow your cover!", txtPalabra = "Word:",
@@ -192,7 +228,12 @@ fun obtenerTextosJuego(idioma: IdiomaSoportado): TextosJuego {
             msgAtrapado = "You caught ", msgErrorInocente1 = "ERROR! ", msgErrorInocente2 = " was innocent. Impostors win by wrong vote.",
             tituloVotar = "Who is the impostor?", descVotar = "If you fail, you lose the game.", btnVolver = "BACK", btnRevelar = "REVEAL",
             dialogoSalirTutTitulo = "Finish the game!", dialogoSalirTutDesc = "You are in the final stretch of the tutorial. Finish the test game to see how it works, or tap SKIP TUTORIAL.",
-            btnEntendido = "GOT IT", txtRonda = "Round"
+            btnEntendido = "GOT IT", txtRonda = "Round",
+            btnPartidaInvalida = "INVALID MATCH", tituloConfirmarSalir = "Exit game?",
+            descConfirmarSalir = "Are you sure you want to exit and return to configuration?",
+            tituloConfirmarAnular = "Void this match?",
+            descConfirmarAnular = "This match won't count and the secret word will be available again without being spent. Do you want to continue?",
+            btnConfirmar = "CONFIRM", btnCancelar = "CANCEL"
         )
     }
 }

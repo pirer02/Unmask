@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -33,6 +34,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 
+
 // 👇 IMPORTS DEL WEBVIEW Y KAMEL PARA IMÁGENES 👇
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.rememberWebViewState
@@ -48,10 +50,11 @@ fun String.capitalizarPrimeraCrear(): String {
 }
 
 // --- MODELOS DE ESTADO ---
-class PalabraUI(palabraIni: String = "", pistaIni: String = "", imagenIni: String? = null) {
+class PalabraUI(palabraIni: String = "", pistaIni: String = "", imagenIni: String? = null, categoriaOrigenIni: String = "") {
     var palabra by mutableStateOf(palabraIni)
     var pista by mutableStateOf(pistaIni)
     var imagenUrl by mutableStateOf(imagenIni)
+    var categoriaOrigen by mutableStateOf(categoriaOrigenIni) // 👇 NUEVO
 
     var errorPalabra by mutableStateOf(false)
     var mensajeErrorPalabra by mutableStateOf("")
@@ -64,13 +67,14 @@ sealed class ElementoUI {
 
     class Individual(val data: PalabraUI = PalabraUI()) : ElementoUI()
 
-    class Conjunto(nombreIni: String = "") : ElementoUI() {
+    class Conjunto(nombreIni: String = "", categoriaOrigenIni: String = "") : ElementoUI() {
         var nombre by mutableStateOf(nombreIni)
         var errorNombre by mutableStateOf(false)
         var mensajeErrorNombre by mutableStateOf("")
         val palabras = mutableStateListOf<PalabraUI>()
         var expandido by mutableStateOf(false)
         var cargando by mutableStateOf(false)
+        var categoriaOrigen by mutableStateOf(categoriaOrigenIni) // 👇 NUEVO
     }
 }
 
@@ -122,6 +126,9 @@ fun PantallaCrear(
     var textoExportado by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
 
+    // 👇 NUEVO: Variables para controlar la mezcla
+    var mostrarDialogoMezclar by remember { mutableStateOf(false) }
+    var listasAMezclar by remember { mutableStateOf<Set<ColeccionGuardada>>(emptySet()) }
 
     var indiceParaBorrar by remember { mutableStateOf<Int?>(null) }
     var tituloDialogoBorrado by remember { mutableStateOf("") }
@@ -193,7 +200,6 @@ fun PantallaCrear(
             errorCategoriaCol = true; hayError = true; primerIndiceError = 0
         }
 
-
         elementos.forEachIndexed { index, el ->
             val indiceRealEnLista = index + 1
             when (el) {
@@ -236,32 +242,62 @@ fun PantallaCrear(
             }
         } else {
             coroutineScope.launch {
+                val categoriaPrincipal = categoriaColeccion.capitalizarPrimeraCrear()
+
                 val elementosGuardables = elementos.map { ui ->
                     when (ui) {
-                        is ElementoUI.Individual -> ElementoGuardado.Individual(ui.data.palabra.capitalizarPrimeraCrear(), ui.data.pista.capitalizarPrimeraCrear(), ui.data.imagenUrl)
-                        is ElementoUI.Conjunto -> ElementoGuardado.Conjunto(ui.nombre.capitalizarPrimeraCrear(), ui.palabras.map { p -> ElementoGuardado.Individual(p.palabra.capitalizarPrimeraCrear(), p.pista.capitalizarPrimeraCrear(), p.imagenUrl) })
+                        is ElementoUI.Individual -> {
+                            val catOrigen = if (ui.data.categoriaOrigen.isNotBlank()) ui.data.categoriaOrigen else categoriaPrincipal
+                            ElementoGuardado.Individual(
+                                ui.data.palabra.capitalizarPrimeraCrear(),
+                                ui.data.pista.capitalizarPrimeraCrear(),
+                                ui.data.imagenUrl,
+                                catOrigen
+                            )
+                        }
+                        is ElementoUI.Conjunto -> {
+                            val catOrigenConjunto = if (ui.categoriaOrigen.isNotBlank()) ui.categoriaOrigen else categoriaPrincipal
+                            ElementoGuardado.Conjunto(
+                                ui.nombre.capitalizarPrimeraCrear(),
+                                ui.palabras.map { p ->
+                                    // 👇 CLAVE AQUÍ: Hereda del conjunto si la palabra no tiene categoría propia
+                                    val catOrigenPalabra = if (p.categoriaOrigen.isNotBlank()) p.categoriaOrigen else catOrigenConjunto
+                                    ElementoGuardado.Individual(
+                                        p.palabra.capitalizarPrimeraCrear(),
+                                        p.pista.capitalizarPrimeraCrear(),
+                                        p.imagenUrl,
+                                        catOrigenPalabra
+                                    )
+                                },
+                                catOrigenConjunto
+                            )
+                        }
                     }
                 }
+
+                val categoriasMezcladas = elementosGuardables.flatMap {
+                    if (it is ElementoGuardado.Individual) listOf(it.categoriaOrigen)
+                    else listOf((it as ElementoGuardado.Conjunto).categoriaOrigen)
+                }.filter { it.isNotBlank() }.distinct()
 
                 val nombreAutor = if (usuarioActual != null) GestorAuth.obtenerNombreUsuario(usuarioActual!!.uid) else null
 
                 val nuevaLista = ColeccionGuardada(
                     nombre = nombreColeccion.capitalizarPrimeraCrear(),
-                    categoria = categoriaColeccion.capitalizarPrimeraCrear(),
+                    categoria = categoriaPrincipal,
                     elementos = elementosGuardables,
                     esPublica = esPublica,
                     idCreador = usuarioActual?.uid,
                     nombreCreador = nombreAutor,
                     likes = coleccionParaEditar?.likes ?: 0,
-                    usuariosLikes = coleccionParaEditar?.usuariosLikes ?: emptyList()
+                    usuariosLikes = coleccionParaEditar?.usuariosLikes ?: emptyList(),
+                    categoriasMezcladas = categoriasMezcladas
                 )
 
                 if (coleccionParaEditar != null) GestorDatos.actualizarColeccion(coleccionParaEditar.nombre, nuevaLista)
                 else GestorDatos.guardarNuevaColeccion(nuevaLista)
 
-                if (usuarioActual != null) {
-                    GestorDatos.subirColeccionNube(usuarioActual!!.uid, nuevaLista)
-                }
+                if (usuarioActual != null) GestorDatos.subirColeccionNube(usuarioActual!!.uid, nuevaLista)
 
                 onGuardadoExitoso()
             }
@@ -409,11 +445,11 @@ fun PantallaCrear(
 
             coleccionParaEditar.elementos.forEach { el ->
                 when (el) {
-                    is ElementoGuardado.Individual -> elementos.add(ElementoUI.Individual(PalabraUI(el.palabra, el.pista, el.imagenUrl)))
+                    is ElementoGuardado.Individual -> elementos.add(ElementoUI.Individual(PalabraUI(el.palabra, el.pista, el.imagenUrl, el.categoriaOrigen)))
                     is ElementoGuardado.Conjunto -> {
-                        val nuevoConjunto = ElementoUI.Conjunto(el.nombreConjunto)
+                        val nuevoConjunto = ElementoUI.Conjunto(el.nombreConjunto, el.categoriaOrigen)
                         el.palabras.forEach { p ->
-                            nuevoConjunto.palabras.add(PalabraUI(p.palabra, p.pista, p.imagenUrl))
+                            nuevoConjunto.palabras.add(PalabraUI(p.palabra, p.pista, p.imagenUrl, p.categoriaOrigen))
                         }
                         elementos.add(nuevoConjunto)
                     }
@@ -575,8 +611,17 @@ fun PantallaCrear(
                         is ElementoUI.Individual -> {
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color(0x3318C1A8)), elevation = CardDefaults.cardElevation(2.dp)) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        Text(textos.etiquetaPalabraIndividual, color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(textos.etiquetaPalabraIndividual, color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                                            // 👇 CHAPA VISUAL CON EL NOMBRE DE LA CATEGORÍA
+                                            if (elemento.data.categoriaOrigen.isNotBlank()) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Surface(color = Color(0xFFE0F2F1), shape = RoundedCornerShape(4.dp)) {
+                                                    Text(elemento.data.categoriaOrigen.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B))
+                                                }
+                                            }
+                                        }
                                         IconButton(onClick = { tituloDialogoBorrado = textos.tituloBorrarPalabra; indiceParaBorrar = index }, modifier = Modifier.size(24.dp)) {
                                             Icon(Icons.Rounded.Close, contentDescription = "Borrar", tint = Color.Red)
                                         }
@@ -612,6 +657,16 @@ fun PantallaCrear(
                                         modifier = Modifier.fillMaxWidth(),
                                         singleLine = true
                                     )
+                                    // 👇 CAMPO PARA EDITAR LA CATEGORÍA
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = elemento.data.categoriaOrigen,
+                                        onValueChange = { elemento.data.categoriaOrigen = it },
+                                        label = { Text(textos.labelCategoriaElemento) },
+                                        keyboardOptions = opcionesTeclado,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true
+                                    )
                                 }
                             }
                         }
@@ -625,7 +680,13 @@ fun PantallaCrear(
                                     ) {
                                         Icon(imageVector = if (elemento.expandido) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = null, tint = Color(0xFFFF6D00))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text(text = if (elemento.nombre.isBlank()) textos.placeholderGrupo else elemento.nombre, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        // 👇 CHAPA VISUAL DEL GRUPO EN LA CABECERA
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(text = if (elemento.nombre.isBlank()) textos.placeholderGrupo else elemento.nombre, color = Color.White, fontWeight = FontWeight.Bold)
+                                            if (elemento.categoriaOrigen.isNotBlank()) {
+                                                Text(elemento.categoriaOrigen.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF6D00))
+                                            }
+                                        }
                                         if (!elemento.expandido && (elemento.errorNombre || elemento.palabras.any { it.errorPalabra || it.errorPista })) {
                                             Icon(Icons.Rounded.Warning, contentDescription = "Error", tint = Color.Red)
                                             Spacer(modifier = Modifier.width(8.dp))
@@ -643,6 +704,16 @@ fun PantallaCrear(
                                                 label = { Text(textos.labelNombreGrupo) },
                                                 keyboardOptions = opcionesTeclado,
                                                 isError = elemento.errorNombre,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                singleLine = true
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            // 👇 CAMPO PARA EDITAR CATEGORÍA DEL GRUPO
+                                            OutlinedTextField(
+                                                value = elemento.categoriaOrigen,
+                                                onValueChange = { elemento.categoriaOrigen = it },
+                                                label = { Text(textos.labelCategoriaElemento) },
+                                                keyboardOptions = opcionesTeclado,
                                                 modifier = Modifier.fillMaxWidth(),
                                                 singleLine = true
                                             )
@@ -957,12 +1028,17 @@ fun PantallaCrear(
 
     // 👇 NUEVOS DIÁLOGOS DE OPCIONES Y EXPORTACIÓN 👇
 
+    // 👇 NUEVOS DIÁLOGOS DE OPCIONES Y EXPORTACIÓN 👇
+
     if (mostrarDialogoOpcionesTexto) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoOpcionesTexto = false },
             title = { Text(textos.tituloOpcionesTexto, fontWeight = FontWeight.Bold) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = { mostrarDialogoOpcionesTexto = false; mostrarDialogoMezclar = true }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A148C))) {
+                        Icon(Icons.Rounded.LibraryAdd, contentDescription = null); Spacer(Modifier.width(8.dp)); Text(textos.btnOpcionMezclar, fontWeight = FontWeight.Bold)
+                    }
                     Button(onClick = { mostrarDialogoOpcionesTexto = false; mostrarDialogoImportar = true }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))) {
                         Icon(Icons.Rounded.Download, contentDescription = null); Spacer(Modifier.width(8.dp)); Text(textos.btnOpcionImportar, fontWeight = FontWeight.Bold)
                     }
@@ -973,6 +1049,69 @@ fun PantallaCrear(
             },
             confirmButton = {},
             dismissButton = { TextButton(onClick = { mostrarDialogoOpcionesTexto = false }) { Text(textos.btnCancelar, color = Color.Gray) } }
+        )
+    }
+
+    if (mostrarDialogoMezclar) {
+        val listasDisponibles = GestorDatos.coleccionesGlobales.filter { it.nombre != coleccionParaEditar?.nombre }
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoMezclar = false },
+            title = { Text(textos.tituloMezclar) },
+            text = {
+                Column {
+                    Text(textos.descMezclar, color = Color.Gray, fontSize = 14.sp)
+                    Spacer(Modifier.height(16.dp))
+                    LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                        items(listasDisponibles) { col ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable {
+                                listasAMezclar = if (listasAMezclar.contains(col)) listasAMezclar - col else listasAMezclar + col
+                            }) {
+                                Checkbox(
+                                    checked = listasAMezclar.contains(col),
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF18C1A8))
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("${col.nombre} (${col.categoria})", fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        listasAMezclar.forEach { col ->
+                            col.elementos.forEach { el ->
+                                when (el) {
+                                    is ElementoGuardado.Individual -> {
+                                        elementos.add(ElementoUI.Individual(PalabraUI(el.palabra, el.pista, el.imagenUrl, el.categoriaOrigen.ifBlank { col.categoria })))
+                                    }
+                                    is ElementoGuardado.Conjunto -> {
+                                        val nuevoConjunto = ElementoUI.Conjunto(el.nombreConjunto, el.categoriaOrigen.ifBlank { col.categoria })
+                                        el.palabras.forEach { p ->
+                                            nuevoConjunto.palabras.add(PalabraUI(p.palabra, p.pista, p.imagenUrl, p.categoriaOrigen.ifBlank { col.categoria }))
+                                        }
+                                        elementos.add(nuevoConjunto)
+                                    }
+                                }
+                            }
+                        }
+                        if (nombreColeccion.isBlank() && listasAMezclar.isNotEmpty()) {
+                            nombreColeccion = (textos.tituloMezclar + " " + listasAMezclar.joinToString(", ") { it.nombre }).take(30)
+                        }
+                        if (categoriaColeccion.isBlank() && listasAMezclar.isNotEmpty()) {
+                            categoriaColeccion = textos.tituloMezclar
+                        }
+
+                        validarDuplicadosGlobales()
+                        mostrarDialogoMezclar = false
+                        listasAMezclar = emptySet()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A148C))
+                ) { Text(textos.btnConfirmarMezcla, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { mostrarDialogoMezclar = false; listasAMezclar = emptySet() }) { Text(textos.btnCancelar, color = Color.Gray) } }
         )
     }
 

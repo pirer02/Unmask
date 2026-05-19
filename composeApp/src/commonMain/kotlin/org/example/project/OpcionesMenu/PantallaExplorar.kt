@@ -606,15 +606,31 @@ fun PantallaExplorar(
 @Composable
 fun DialogoInfoExplorar(coleccion: ColeccionGuardada, textos: TextosExplorar, onCerrar: () -> Unit) {
     var textoBusquedaPalabra by remember { mutableStateOf("") }
-    val todasLasPalabras = remember(coleccion) {
+
+    // 👇 NUEVO: Extraemos cada palabra con su categoría
+    val palabrasConCategoria = remember(coleccion) {
         coleccion.elementos.flatMap { elemento ->
             when (elemento) {
-                is ElementoGuardado.Individual -> listOf(elemento.palabra)
-                is ElementoGuardado.Conjunto -> elemento.palabras.map { it.palabra }
+                is ElementoGuardado.Individual -> listOf(
+                    Pair(elemento.palabra, elemento.categoriaOrigen.ifBlank { coleccion.categoria })
+                )
+                is ElementoGuardado.Conjunto -> elemento.palabras.map { p ->
+                    Pair(p.palabra, p.categoriaOrigen.ifBlank { coleccion.categoria })
+                }
             }
         }
     }
-    val filtradas = todasLasPalabras.filter { it.contains(textoBusquedaPalabra, ignoreCase = true) }
+
+    val filtradas = palabrasConCategoria.filter { it.first.contains(textoBusquedaPalabra, ignoreCase = true) }
+
+    // 👇 NUEVO: Agrupamos
+    val agrupadasPorCategoria = filtradas.groupBy { it.second }
+
+    val textoCategorias = if (coleccion.categoriasMezcladas.size > 1) {
+        coleccion.categoriasMezcladas.joinToString(" • ").uppercase()
+    } else {
+        coleccion.categoria.uppercase()
+    }
 
     Dialog(onDismissRequest = onCerrar) {
         Card(
@@ -626,7 +642,7 @@ fun DialogoInfoExplorar(coleccion: ColeccionGuardada, textos: TextosExplorar, on
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(coleccion.nombre, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
-                        Text(coleccion.categoria.uppercase(), color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(textoCategorias, color = Color(0xFFFF6D00), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                     IconButton(onClick = onCerrar) { Icon(Icons.Rounded.Close, null) }
                 }
@@ -644,18 +660,29 @@ fun DialogoInfoExplorar(coleccion: ColeccionGuardada, textos: TextosExplorar, on
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("${todasLasPalabras.size} ${textos.palabrasTotales}", color = Color.Gray, fontSize = 13.sp)
+                Text("${palabrasConCategoria.size} ${textos.palabrasTotales}", color = Color.Gray, fontSize = 13.sp)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(filtradas) { palabra ->
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFFF5F5F5),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(palabra, modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+                    agrupadasPorCategoria.forEach { (categoria, listaPalabras) ->
+                        item {
+                            Text(
+                                text = categoria.uppercase(),
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(listaPalabras) { p ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color(0xFFF5F5F5),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(p.first, modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                 }
@@ -732,6 +759,13 @@ fun TarjetaComunidad(
         }
     }
 
+    // 👇 NUEVO: Unimos todas las categorías mezcladas
+    val textoCategorias = if (coleccion.categoriasMezcladas.size > 1) {
+        coleccion.categoriasMezcladas.joinToString(" • ").uppercase()
+    } else {
+        coleccion.categoria.uppercase()
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -806,8 +840,9 @@ fun TarjetaComunidad(
 
             Spacer(modifier = Modifier.height(6.dp))
 
+            // 👇 APLICAMOS EL TEXTO AQUÍ
             Surface(color = Color(0xFFE0F2F1), shape = RoundedCornerShape(8.dp)) {
-                Text(coleccion.categoria.uppercase(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(textoCategorias, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00897B), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
 
             Spacer(modifier = Modifier.weight(1f))
