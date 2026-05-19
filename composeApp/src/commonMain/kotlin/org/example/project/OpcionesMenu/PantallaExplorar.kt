@@ -143,16 +143,17 @@ fun PantallaExplorar(
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                IconButton(onClick = {
-                    if (pasoTutorial == 5) {
-                        scope.launch { snackbarHostState.showSnackbar(textos.msgAvisoTutorialVolver) }
-                    } else if (vistaActual == VistaExplorar.PERFIL_USUARIO) {
-                        vistaActual = VistaExplorar.FEED
-                    } else {
-                        onVolver()
+                // MODIFICACIÓN: La flecha solo aparece si estamos dentro del perfil de un usuario ajeno
+                if (vistaActual == VistaExplorar.PERFIL_USUARIO) {
+                    IconButton(onClick = {
+                        if (pasoTutorial == 5) {
+                            scope.launch { snackbarHostState.showSnackbar(textos.msgAvisoTutorialVolver) }
+                        } else {
+                            vistaActual = VistaExplorar.FEED
+                        }
+                    }) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver", tint = Color(0xFF1A1A1A))
                     }
-                }) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Volver", tint = Color(0xFF1A1A1A))
                 }
                 Text(
                     text = if (vistaActual == VistaExplorar.PERFIL_USUARIO) "${textos.tituloPerfil} @${perfilSeleccionado?.username ?: ""}" else textos.tituloExplorar,

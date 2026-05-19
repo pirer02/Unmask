@@ -78,6 +78,8 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
     var coleccionParaJugar by remember { mutableStateOf<ColeccionGuardada?>(null) }
     var opcionesConfiguradas by remember { mutableStateOf<OpcionesJuego?>(null) }
 
+    var pantallaOrigenEdicion by remember { mutableStateOf<PantallaNavegacion>(PantallaNavegacion.INICIO) }
+
     var uidPerfilExplorar by remember { mutableStateOf<String?>(null) }
 
     val jugadoresGlobales = GestorDatos.jugadoresGlobales
@@ -163,7 +165,10 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                 AnimatedContent(
                     targetState = pantallaActual,
                     transitionSpec = {
-                        (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300)))
+                        (fadeIn(animationSpec = tween(300)) + scaleIn(
+                            initialScale = 0.95f,
+                            animationSpec = tween(300)
+                        ))
                             .togetherWith(fadeOut(animationSpec = tween(300)))
                     },
                     label = "TransicionNavegacion"
@@ -193,6 +198,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 onCrearLista = {
                                     if (pasoTutorial == 1) GestorDatos.avanzarTutorial(2)
                                     coleccionAEditar = null
+                                    pantallaOrigenEdicion = PantallaNavegacion.INICIO
                                     pantallaActual = PantallaNavegacion.CREAR
                                 },
                                 onIrAPerfil = { pantallaActual = PantallaNavegacion.PERFIL },
@@ -202,10 +208,12 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 }
                             )
                         }
+
                         PantallaNavegacion.BIBLIOTECA -> PantallaConCarga {
                             PantallaBiblioteca(
                                 onEditar = { coleccion ->
                                     coleccionAEditar = coleccion
+                                    pantallaOrigenEdicion = PantallaNavegacion.BIBLIOTECA
                                     pantallaActual = PantallaNavegacion.CREAR
                                 },
                                 onJugar = { coleccion ->
@@ -221,6 +229,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 }
                             )
                         }
+
                         PantallaNavegacion.CREAR -> PantallaConCarga {
                             PantallaCrear(
                                 coleccionParaEditar = coleccionAEditar,
@@ -232,10 +241,11 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 },
                                 onVolver = {
                                     coleccionAEditar = null
-                                    pantallaActual = PantallaNavegacion.INICIO
+                                    pantallaActual = pantallaOrigenEdicion
                                 }
                             )
                         }
+
                         PantallaNavegacion.EXPLORAR -> PantallaConCarga {
                             PantallaExplorar(
                                 uidInicial = uidPerfilExplorar,
@@ -250,16 +260,19 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 },
                                 onEditar = { coleccion ->
                                     coleccionAEditar = coleccion
+                                    pantallaOrigenEdicion = PantallaNavegacion.EXPLORAR
                                     pantallaActual = PantallaNavegacion.CREAR
                                 }
                             )
                         }
+
                         PantallaNavegacion.PERFIL -> PantallaConCarga {
                             PantallaMiPerfil(
                                 onVolver = { pantallaActual = PantallaNavegacion.INICIO },
                                 onIniciarSesionGoogle = onLoginGoogle,
                                 onEditar = { coleccion ->
                                     coleccionAEditar = coleccion
+                                    pantallaOrigenEdicion = PantallaNavegacion.PERFIL
                                     pantallaActual = PantallaNavegacion.CREAR
                                 },
                                 onJugar = { coleccion ->
@@ -274,6 +287,7 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                 }
                             )
                         }
+
                         PantallaNavegacion.CONFIG_JUEGO -> {
                             coleccionParaJugar?.let { coleccion ->
                                 PantallaConfiguracion(
@@ -281,16 +295,25 @@ fun ContenedorPrincipal(onLoginGoogle: () -> Unit) {
                                     jugadores = jugadoresGlobales,
                                     opcionesIniciales = opcionesConfiguradas,
                                     snackbarHostState = snackbarHostState,
-                                    onIrAJugadores = { pantallaAnteriorJugadores = PantallaNavegacion.CONFIG_JUEGO; pantallaActual = PantallaNavegacion.JUGADORES },
+                                    onIrAJugadores = {
+                                        pantallaAnteriorJugadores =
+                                            PantallaNavegacion.CONFIG_JUEGO; pantallaActual =
+                                        PantallaNavegacion.JUGADORES
+                                    },
                                     onIniciarJuego = { opciones ->
                                         if (pasoTutorial == 4) GestorDatos.avanzarTutorial(5)
-                                        opcionesConfiguradas = opciones; pantallaActual = PantallaNavegacion.JUEGO
+                                        opcionesConfiguradas = opciones; pantallaActual =
+                                        PantallaNavegacion.JUEGO
                                     },
                                     onVolver = { pantallaActual = PantallaNavegacion.INICIO }
                                 )
                             }
                         }
-                        PantallaNavegacion.JUGADORES -> PantallaJugadores(jugadores = jugadoresGlobales, onVolver = { pantallaActual = pantallaAnteriorJugadores })
+
+                        PantallaNavegacion.JUGADORES -> PantallaJugadores(
+                            jugadores = jugadoresGlobales,
+                            onVolver = { pantallaActual = pantallaAnteriorJugadores })
+
                         PantallaNavegacion.JUEGO -> {
                             if (coleccionParaJugar != null && opcionesConfiguradas != null) {
                                 PantallaJuego(

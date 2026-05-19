@@ -112,12 +112,10 @@ fun PantallaMiPerfil(
     var misCreacionesExpandido by remember { mutableStateOf(false) }
     var textoBusquedaCreaciones by remember { mutableStateOf("") }
 
-    // Mantenemos el filtro interno en español para no romper la lógica de ordenamiento
     var filtroOrdenCreaciones by remember { mutableStateOf("Nuevas") }
 
     var mostrarDialogoDescripcion by remember { mutableStateOf(false) }
     var inputDescripcion by remember { mutableStateOf("") }
-
 
     val imagePicker = rememberImagePickerLauncher(
         selectionMode = SelectionMode.Single,
@@ -170,7 +168,6 @@ fun PantallaMiPerfil(
             estadoPantalla = "INVITADO"
         } else {
             invitacionesEnviadas = GestorAuth.obtenerInvitacionesEnviadas(usuarioAuth!!.uid)
-
             val perfil = GestorAuth.obtenerPerfilSocial(usuarioAuth!!.uid)
 
             if (perfil != null && perfil.fotoPerfil.isNullOrEmpty() && !usuarioAuth!!.photoURL.isNullOrEmpty()) {
@@ -223,11 +220,11 @@ fun PantallaMiPerfil(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                IconButton(onClick = {
-                    if (seccionActual == SeccionPerfil.LISTA_USUARIOS) seccionActual = SeccionPerfil.PRINCIPAL
-                    else onVolver()
-                }) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = null, tint = Color(0xFF1A1A1A))
+                // MODIFICACIÓN: La flecha de retroceso solo aparece si estamos en una subsección como la LISTA_USUARIOS
+                if (seccionActual == SeccionPerfil.LISTA_USUARIOS) {
+                    IconButton(onClick = { seccionActual = SeccionPerfil.PRINCIPAL }) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = null, tint = Color(0xFF1A1A1A))
+                    }
                 }
                 Text(
                     text = if (seccionActual == SeccionPerfil.LISTA_USUARIOS) tituloListaUsuarios else textos.tituloMiPerfil,
@@ -458,7 +455,6 @@ fun PantallaMiPerfil(
                                                     Spacer(modifier = Modifier.height(12.dp))
 
                                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                        // Aislamos la UI de la lógica interna de ordenamiento
                                                         val opcionesInternas = listOf("Nuevas", "Populares", "Mayor a menor", "Menor a mayor")
                                                         val opcionesUi = listOf(textos.filtroNuevas, textos.filtroPopulares, textos.filtroMayorMenor, textos.filtroMenorMayor)
 
@@ -479,8 +475,7 @@ fun PantallaMiPerfil(
                                                     Spacer(modifier = Modifier.height(16.dp))
 
                                                     val misListasFiltradas = GestorDatos.coleccionesGlobales.filter { col ->
-                                                        !col.esDescargada &&
-                                                                (col.nombre.contains(textoBusquedaCreaciones, ignoreCase = true) || col.categoria.contains(textoBusquedaCreaciones, ignoreCase = true))
+                                                        !col.esDescargada && (col.nombre.contains(textoBusquedaCreaciones, ignoreCase = true) || col.categoria.contains(textoBusquedaCreaciones, ignoreCase = true))
                                                     }
 
                                                     val misListasOrdenadas = when (filtroOrdenCreaciones) {
@@ -516,7 +511,6 @@ fun PantallaMiPerfil(
 
                                                                         val pendientesUid = invitacionesEnviadas.filter { it.nombreLista == col.nombre }.map { it.uidDestino }
                                                                         perfilesPendientes = pendientesUid.mapNotNull { GestorAuth.obtenerPerfilSocial(it) }
-
                                                                         cargandoColaboradores = false
                                                                     }
                                                                 }
