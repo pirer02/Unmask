@@ -29,6 +29,8 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.project.Datos.*
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 // 👇 IMPORTS DEL WEBVIEW Y KAMEL PARA IMÁGENES 👇
 import com.multiplatform.webview.web.WebView
@@ -113,12 +115,46 @@ fun PantallaCrear(
     var elementosPendientesImportar by remember { mutableStateOf<List<ElementoUI>>(emptyList()) }
     var mostrarDialogoConflictos by remember { mutableStateOf(false) }
 
+
+    var mostrarDialogoOpcionesTexto by remember { mutableStateOf(false) }
+    var mostrarDialogoExportar by remember { mutableStateOf(false) }
+    var textoExportado by remember { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
+
+
     var indiceParaBorrar by remember { mutableStateOf<Int?>(null) }
     var tituloDialogoBorrado by remember { mutableStateOf("") }
 
     var palabraBuscandoImagen by remember { mutableStateOf<PalabraUI?>(null) }
     var contextoBusquedaImagen by remember { mutableStateOf("") }
     var mostrarBuscadorImagen by remember { mutableStateOf(false) }
+
+    fun generarTextoExportacion(): String {
+        val sb = StringBuilder()
+        elementos.forEach { el ->
+            when (el) {
+                is ElementoUI.Individual -> {
+                    if (el.data.palabra.isNotBlank() && el.data.pista.isNotBlank()) {
+                        sb.append("${el.data.palabra}, ${el.data.pista}\n\n")
+                    }
+                }
+                is ElementoUI.Conjunto -> {
+                    val palabrasValidas = el.palabras.filter { it.palabra.isNotBlank() && it.pista.isNotBlank() }
+                    if (el.nombre.isNotBlank() && palabrasValidas.isNotEmpty()) {
+                        sb.append(".${el.nombre}\n")
+                        palabrasValidas.forEachIndexed { index, p ->
+                            if (index == palabrasValidas.size - 1) {
+                                sb.append("${p.palabra}, ${p.pista}.\n\n") // Punto para cerrar el grupo
+                            } else {
+                                sb.append("${p.palabra}, ${p.pista}\n")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return sb.toString().trim()
+    }
 
     fun validarDuplicadosGlobales() {
         val palabrasVistas = mutableSetOf<String>()
@@ -320,12 +356,13 @@ fun PantallaCrear(
                     }
 
                     IconButton(
-                        onClick = { mostrarDialogoImportar = true },
+                        // 👇 CAMBIAMOS EL TRIGGER AQUÍ 👇
+                        onClick = { mostrarDialogoOpcionesTexto = true },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             Icons.Rounded.DataArray,
-                            contentDescription = "Importar Texto",
+                            contentDescription = "Opciones Texto",
                             tint = Color(0xFF18C1A8)
                         )
                     }
@@ -1203,5 +1240,77 @@ fun PantallaCrear(
                     mostrarDialogoConflictos = false
                 }) { Text(textos.btnCancelarImportacion) }
             })
+    }
+
+    // 👇 NUEVOS DIÁLOGOS DE OPCIONES Y EXPORTACIÓN 👇
+
+    if (mostrarDialogoOpcionesTexto) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoOpcionesTexto = false },
+            title = { Text(textos.tituloOpcionesTexto, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = {
+                            mostrarDialogoOpcionesTexto = false
+                            mostrarDialogoImportar = true
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18C1A8))
+                    ) {
+                        Icon(Icons.Rounded.Download, contentDescription = null); Spacer(Modifier.width(8.dp))
+                        Text(textos.btnOpcionImportar, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = {
+                            mostrarDialogoOpcionesTexto = false
+                            textoExportado = generarTextoExportacion()
+                            mostrarDialogoExportar = true
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
+                    ) {
+                        Icon(Icons.Rounded.Upload, contentDescription = null); Spacer(Modifier.width(8.dp))
+                        Text(textos.btnOpcionExportar, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {}, // Vacíos porque hemos puesto los botones dentro de 'text' para mejor diseño
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoOpcionesTexto = false }) {
+                    Text(textos.btnCancelar, color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (mostrarDialogoExportar) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoExportar = false },
+            title = { Text(textos.tituloExportar) },
+            text = {
+                OutlinedTextField(
+                    value = textoExportado,
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth().height(300.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(textoExportado))
+                    coroutineScope.launch { snackbarHostState.showSnackbar(textos.msgCopiado) }
+                    mostrarDialogoExportar = false
+                }) {
+                    Text(textos.btnCopiar, color = Color(0xFF18C1A8), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoExportar = false }) {
+                    Text(textos.btnCerrar, color = Color.Gray)
+                }
+            }
+        )
     }
 }

@@ -56,7 +56,14 @@ data class TextosCrear(
     val msgSesionPrimero: String,
     val msgImagenSelec: String,
     val msgAbrirImagen: String,
-    val errorRepetida: String
+    val errorRepetida: String,
+    // 👇 NUEVOS TEXTOS PARA IMPORTAR/EXPORTAR 👇
+    val tituloOpcionesTexto: String,
+    val btnOpcionImportar: String,
+    val btnOpcionExportar: String,
+    val tituloExportar: String,
+    val btnCopiar: String,
+    val msgCopiado: String
 )
 
 fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
@@ -80,7 +87,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "Para salir, pulsa 'Omitir Tutorial' arriba a la derecha.", msgGuardarTutorial = "Guarda tu lista con 3 palabras para continuar.",
             msgMinimoPalabras = "Para el tutorial, añade al menos 3 palabras de prueba.", msgFaltanCampos = "Faltan campos por rellenar o hay errores",
             msgImportExito = "Elementos importados con éxito", msgSesionPublicar = "Debes iniciar sesión para publicar listas.", msgSesionPrimero = "Inicia sesión primero.",
-            msgImagenSelec = "Imagen seleccionada", msgAbrirImagen = "Abre la imagen en grande primero", errorRepetida = "Repetida"
+            msgImagenSelec = "Imagen seleccionada", msgAbrirImagen = "Abre la imagen en grande primero", errorRepetida = "Repetida",
+            tituloOpcionesTexto = "¿Qué deseas hacer?", btnOpcionImportar = "Importar Textos", btnOpcionExportar = "Exportar Lista",
+            tituloExportar = "Exportar Lista", btnCopiar = "COPIAR TEXTO", msgCopiado = "Texto copiado al portapapeles"
         )
         IdiomaSoportado.FRANCES -> TextosCrear(
             cargandoTaller = "Préparation de l'atelier...", tituloEditar = "Modifier la liste", tituloNueva = "Nouvelle liste", btnGuardar = "SAUVEGARDER",
@@ -101,7 +110,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "Pour quitter, appuyez sur 'Ignorer le tutoriel' en haut à droite.", msgGuardarTutorial = "Sauvegardez votre liste avec 3 mots pour continuer.",
             msgMinimoPalabras = "Pour le tutoriel, ajoutez au moins 3 mots de test.", msgFaltanCampos = "Il manque des champs ou il y a des erreurs",
             msgImportExito = "Éléments importés avec succès", msgSesionPublicar = "Connectez-vous pour publier des listes.", msgSesionPrimero = "Connectez-vous d'abord.",
-            msgImagenSelec = "Image sélectionnée", msgAbrirImagen = "Ouvrez l'image en grand d'abord", errorRepetida = "Répété"
+            msgImagenSelec = "Image sélectionnée", msgAbrirImagen = "Ouvrez l'image en grand d'abord", errorRepetida = "Répété",
+            tituloOpcionesTexto = "Que voulez-vous faire ?", btnOpcionImportar = "Importer des textes", btnOpcionExportar = "Exporter la liste",
+            tituloExportar = "Exporter la liste", btnCopiar = "COPIER LE TEXTE", msgCopiado = "Texte copié dans le presse-papiers"
         )
         IdiomaSoportado.ITALIANO -> TextosCrear(
             cargandoTaller = "Preparazione del laboratorio...", tituloEditar = "Modifica Lista", tituloNueva = "Nuova Lista", btnGuardar = "SALVA",
@@ -122,7 +133,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "Per uscire, premi 'Ignora Tutorial' in alto a destra.", msgGuardarTutorial = "Salva la lista con 3 parole per continuare.",
             msgMinimoPalabras = "Per il tutorial, aggiungi almeno 3 parole di prova.", msgFaltanCampos = "Campi mancanti o errori presenti",
             msgImportExito = "Elementi importati con successo", msgSesionPublicar = "Devi accedere per pubblicare le liste.", msgSesionPrimero = "Accedi prima.",
-            msgImagenSelec = "Immagine selezionata", msgAbrirImagen = "Apri l'immagine in grande prima", errorRepetida = "Ripetuta"
+            msgImagenSelec = "Immagine selezionata", msgAbrirImagen = "Apri l'immagine in grande prima", errorRepetida = "Ripetuta",
+            tituloOpcionesTexto = "Cosa vuoi fare?", btnOpcionImportar = "Importa testi", btnOpcionExportar = "Esporta Lista",
+            tituloExportar = "Esporta Lista", btnCopiar = "COPIA TESTO", msgCopiado = "Testo copiato negli appunti"
         )
         IdiomaSoportado.ALEMAN -> TextosCrear(
             cargandoTaller = "Werkstatt wird vorbereitet...", tituloEditar = "Liste bearbeiten", tituloNueva = "Neue Liste", btnGuardar = "SPEICHERN",
@@ -143,7 +156,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "Drücke 'Tutorial überspringen' oben rechts, um zu beenden.", msgGuardarTutorial = "Speichere die Liste mit 3 Wörtern, um fortzufahren.",
             msgMinimoPalabras = "Füge für das Tutorial mindestens 3 Testwörter hinzu.", msgFaltanCampos = "Fehlende Felder oder Fehler vorhanden",
             msgImportExito = "Elemente erfolgreich importiert", msgSesionPublicar = "Du musst dich anmelden, um Listen zu veröffentlichen.", msgSesionPrimero = "Zuerst anmelden.",
-            msgImagenSelec = "Bild ausgewählt", msgAbrirImagen = "Öffne das Bild zuerst in groß", errorRepetida = "Wiederholt"
+            msgImagenSelec = "Bild ausgewählt", msgAbrirImagen = "Öffne das Bild zuerst in groß", errorRepetida = "Wiederholt",
+            tituloOpcionesTexto = "Was möchtest du tun?", btnOpcionImportar = "Texte importieren", btnOpcionExportar = "Liste exportieren",
+            tituloExportar = "Liste exportieren", btnCopiar = "TEXT KOPIEREN", msgCopiado = "Text in die Zwischenablage kopiert"
         )
         IdiomaSoportado.CHINO -> TextosCrear(
             cargandoTaller = "正在准备工作坊...", tituloEditar = "编辑列表", tituloNueva = "新列表", btnGuardar = "保存",
@@ -164,7 +179,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "要退出，请按右上角的“跳过教程”。", msgGuardarTutorial = "保存包含3个单词的列表以继续。",
             msgMinimoPalabras = "对于教程，请至少添加3个测试单词。", msgFaltanCampos = "缺少字段或存在错误",
             msgImportExito = "元素导入成功", msgSesionPublicar = "您必须登录才能发布列表。", msgSesionPrimero = "请先登录。",
-            msgImagenSelec = "已选择图片", msgAbrirImagen = "请先打开大图", errorRepetida = "重复"
+            msgImagenSelec = "已选择图片", msgAbrirImagen = "请先打开大图", errorRepetida = "重复",
+            tituloOpcionesTexto = "你想做什么？", btnOpcionImportar = "导入文本", btnOpcionExportar = "导出列表",
+            tituloExportar = "导出列表", btnCopiar = "复制文本", msgCopiado = "文本已复制到剪贴板"
         )
         IdiomaSoportado.JAPONES -> TextosCrear(
             cargandoTaller = "ワークショップを準備中...", tituloEditar = "リストを編集", tituloNueva = "新しいリスト", btnGuardar = "保存",
@@ -185,9 +202,10 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "終了するには右上の「チュートリアルをスキップ」を押してください。", msgGuardarTutorial = "続けるには3つの単語を含むリストを保存してください。",
             msgMinimoPalabras = "チュートリアルのために、少なくとも3つのテスト単語を追加してください。", msgFaltanCampos = "未入力のフィールドまたはエラーがあります",
             msgImportExito = "要素が正常にインポートされました", msgSesionPublicar = "リストを公開するにはログインする必要があります。", msgSesionPrimero = "最初にログインしてください。",
-            msgImagenSelec = "画像が選択されました", msgAbrirImagen = "最初に大きな画像を開いてください", errorRepetida = "重複"
+            msgImagenSelec = "画像が選択されました", msgAbrirImagen = "最初に大きな画像を開いてください", errorRepetida = "重複",
+            tituloOpcionesTexto = "どうしますか？", btnOpcionImportar = "テキストをインポート", btnOpcionExportar = "リストをエクスポート",
+            tituloExportar = "リストをエクスポート", btnCopiar = "テキストをコピー", msgCopiado = "クリップボードにコピーしました"
         )
-        // INGLÉS POR DEFECTO
         else -> TextosCrear(
             cargandoTaller = "Preparing the workshop...", tituloEditar = "Edit List", tituloNueva = "New List", btnGuardar = "SAVE",
             placeholderBuscar = "Search word, clue or group...", labelNombreLista = "List Name", labelCategoria = "Category (Ex: Movies)",
@@ -207,7 +225,9 @@ fun obtenerTextosCrear(idioma: IdiomaSoportado): TextosCrear {
             msgSalirTutorial = "To exit, press 'Skip Tutorial' in the top right.", msgGuardarTutorial = "Save your list with 3 words to continue.",
             msgMinimoPalabras = "For the tutorial, add at least 3 test words.", msgFaltanCampos = "Missing fields or errors found",
             msgImportExito = "Elements imported successfully", msgSesionPublicar = "You must log in to publish lists.", msgSesionPrimero = "Log in first.",
-            msgImagenSelec = "Image selected", msgAbrirImagen = "Open the full image first", errorRepetida = "Repeated"
+            msgImagenSelec = "Image selected", msgAbrirImagen = "Open the full image first", errorRepetida = "Repeated",
+            tituloOpcionesTexto = "What do you want to do?", btnOpcionImportar = "Import Texts", btnOpcionExportar = "Export List",
+            tituloExportar = "Export List", btnCopiar = "COPY TEXT", msgCopiado = "Text copied to clipboard"
         )
     }
 }
