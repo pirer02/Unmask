@@ -1,35 +1,30 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+# 🕵️‍♂️ Unmask: Impostor Online
 
-* [/composeApp](./composeApp/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./composeApp/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./composeApp/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./composeApp/src/jvmMain/kotlin)
-    folder is the appropriate location.
+![Kotlin](https://img.shields.io/badge/Kotlin-B125EA?style=for-the-badge&logo=kotlin&logoColor=white)
+**Unmask** es un juego multijugador de deducción social en línea donde los jugadores deben colaborar (o engañar) para descubrir al impostor oculto antes de que sea demasiado tarde.
 
-* [/iosApp](./iosApp/iosApp) contains iOS applications. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+## 🎮 Vistazo al Juego
+> **Nota para ti:** Al ser un juego, un **GIF animado** mostrando una partida en movimiento vale oro. Si no es posible, añade al menos dos buenas capturas: una del menú principal/sala de espera y otra de la partida en curso.
+<div align="center">
+  <img src="enlace_captura_menu.png" width="200"/>
+  <img src="enlace_captura_partida.png" width="200"/>
+</div>
 
-### Build and Run Android Application
+## ✨ Mecánicas y Características
+* **Multijugador en tiempo real:** Lógica de sincronización de estados entre jugadores.
+* **Sistema de Roles:** Asignación dinámica de roles (Impostor vs. Jugadores regulares).
+* **Desarrollo en Kotlin:** Lógica de juego estructurada y optimizada.
 
-To build and run the development version of the Android app, use the run configuration from the run widget
-in your IDE’s toolbar or build it directly from the terminal:
-- on macOS/Linux
-  ```shell
-  ./gradlew :composeApp:assembleDebug
-  ```
-- on Windows
-  ```shell
-  .\gradlew.bat :composeApp:assembleDebug
-  ```
+## 🛠️ Tecnologías y Arquitectura
+* **Lenguaje:** Kotlin
+* **Arquitectura:** (Ej: MVVM / MVI - *Modifica esto según lo que hayas usado*)
+* **Red / Backend:** (Ej: Firebase Realtime Database / Sockets - *Añade lo que uses para conectar a los jugadores*)
 
-### Build and Run iOS Application
+## 🚀 Instalación y Descarga
+Descarga la última versión jugable desde la sección de **Releases** y únete a la partida.
 
-To build and run the development version of the iOS app, use the run configuration from the run widget
-in your IDE’s toolbar or open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+* [Descargar Unmask (https://github.com/pirer02/Unmask/releases/download/1.0.0/Unmask.apk)]
 
----
-
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+Para clonar y revisar el código fuente localmente:
+```bash
+git clone [https://github.com/pirer02/Unmask.git](https://github.com/pirer02/Unmask.git)
