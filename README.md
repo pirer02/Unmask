@@ -4,7 +4,11 @@
 **Unmask** es un juego multijugador de deducción social en línea donde los jugadores deben colaborar (o engañar) para descubrir al impostor oculto antes de que sea demasiado tarde.
 
 ## 🎮 Vistazo al Juego
-> **Nota para ti:** Al ser un juego, un **GIF animado** mostrando una partida en movimiento vale oro. Si no es posible, añade al menos dos buenas capturas: una del menú principal/sala de espera y otra de la partida en curso.
+<img width="204" height="451" alt="image" src="https://github.com/user-attachments/assets/db367b08-b57f-4452-9bd0-0e2c36d080bd" />
+<img width="195" height="448" alt="image" src="https://github.com/user-attachments/assets/b546dca1-9b0d-44f9-bd63-20a4209baf1f" />
+<img width="194" height="439" alt="image" src="https://github.com/user-attachments/assets/5cbaa1a9-6200-40cf-af97-e8792beea964" />
+
+
 <div align="center">
   <img src="enlace_captura_menu.png" width="200"/>
   <img src="enlace_captura_partida.png" width="200"/>
