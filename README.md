@@ -19,8 +19,6 @@
 
 ## 🛠️ Tecnologías y Arquitectura
 * **Lenguaje:** Kotlin
-* **Arquitectura:** (Ej: MVVM / MVI - *Modifica esto según lo que hayas usado*)
-* **Red / Backend:** (Ej: Firebase Realtime Database / Sockets - *Añade lo que uses para conectar a los jugadores*)
 
 ## 🚀 Instalación y Descarga
 Descarga la última versión jugable desde la sección de **Releases** y únete a la partida.
