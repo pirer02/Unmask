@@ -1,7 +1,7 @@
 # 🕵️‍♂️ Unmask: Impostor Online
 
 ![Kotlin](https://img.shields.io/badge/Kotlin-B125EA?style=for-the-badge&logo=kotlin&logoColor=white)
-**Unmask** es un juego multijugador de deducción social en línea donde los jugadores deben colaborar (o engañar) para descubrir al impostor oculto antes de que sea demasiado tarde.
+**Unmask** es un juego multijugador de deducción social en línea donde los jugadores deben colaborar (o engañar) para descubrir al impostor oculto antes de que sea demasiado tarde, la aplicacion consiste en crear tus propias listas personalizadas para jugar con tus amigos o puedes navegar y descargar los que suban los usuarios publicamente para poder descargarlos y tener un entretenimiento infinito.
 
 ## 🎮 Vistazo al Juego
 <img width="204" height="451" alt="image" src="https://github.com/user-attachments/assets/db367b08-b57f-4452-9bd0-0e2c36d080bd" />
